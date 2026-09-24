@@ -3,6 +3,9 @@ const authRouter = require('./routes/auth.js');
 const calendarRouter = require('./routes/calendar.js');
 const meetingsRouter = require('./routes/meetings.js');
 const agentRouter = require('./routes/agent.js');
+const dashboardRouter = require('./routes/dashboard.js');
+const inboxRouter = require('./routes/inbox.js');
+const teamsRouter = require('./routes/teams.js');
 const bodyParser = require('body-parser');
 const MeetingOrchestrator = require('./services/orchestrator.js');
 const { db } = require('./db.js');
@@ -38,10 +41,16 @@ app.use((req, res, next) => {
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Static frontend
+app.use(express.static('public'));
+
 app.use('/auth', authRouter);
 app.use('/calendar', calendarRouter);
 app.use('/meetings', meetingsRouter);
 app.use('/agent', agentRouter);
+app.use('/dashboard', dashboardRouter);
+app.use('/inbox', inboxRouter);
+app.use('/teams', teamsRouter);
 
 // Agent request endpoint - the core AI agent loop
 app.post('/agent/request', async (req, res) => {
