@@ -150,7 +150,40 @@ test('frontend is served at /', async () => {
   assert.ok(html.includes('Meeting Agent'));
 });
 
-// ---- Phase 9: team workspace ----
+// ---- Phase 10: proactive agent ----
+
+test('GET /proactive/hygiene returns a score and issues list', async () => {
+  const { status, json } = await api('GET', '/proactive/hygiene');
+  assert.equal(status, 200);
+  assert.equal(typeof json.score, 'number');
+  assert.ok(Array.isArray(json.issues));
+});
+
+test('GET /proactive/recurring flags recurring events and workspace linkage', async () => {
+  const { status, json } = await api('GET', '/proactive/recurring');
+  assert.equal(status, 200);
+  assert.ok(json.recurring.length >= 2, 'expected recurring events from seed');
+  const standup = json.recurring.find(r => /standup/i.test(r.title));
+  assert.ok(standup, 'expected Team Standup');
+  assert.ok(standup.freq, 'expected freq');
+  assert.equal(typeof standup.linkedWorkspace, 'boolean');
+});
+
+test('GET /proactive/focus finds open blocks or overloaded days', async () => {
+  const { status, json } = await api('GET', '/proactive/focus');
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(json.focusBlocks));
+  assert.ok(Array.isArray(json.overloaded));
+});
+
+test('GET /proactive/suggestions returns a prioritized feed with summary', async () => {
+  const { status, json } = await api('GET', '/proactive/suggestions');
+  assert.equal(status, 200);
+  assert.ok(Array.isArray(json.feed));
+  assert.equal(typeof json.summary.score, 'number');
+  assert.equal(typeof json.summary.hygieneIssues, 'number');
+  assert.equal(typeof json.summary.recurringWithoutWorkspace, 'number');
+});
 
 test('GET /people returns a directory with seeded teammates', async () => {
   const { status, json } = await api('GET', '/people');

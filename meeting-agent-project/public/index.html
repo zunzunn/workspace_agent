@@ -60,6 +60,7 @@
       <button data-view="inbox">Inbox</button>
       <button data-view="teams">Teams</button>
       <button data-view="people">People</button>
+      <button data-view="suggestions">Suggestions</button>
     </nav>
   </header>
   <main>
@@ -96,6 +97,11 @@
 
     <div id="view-people" class="hidden">
       <div class="grid" id="peopleGrid"></div>
+    </div>
+
+    <div id="view-suggestions" class="hidden">
+      <div class="stats" id="suggestionStats"></div>
+      <div class="card"><h3>Suggestion Feed</h3><ul id="suggestionList"></ul></div>
     </div>
   </main>
 
@@ -182,8 +188,23 @@
         </div>`).join('') || `<div class="card"><h3>No teammates</h3><p class="muted">Add team members to see them here.</p></div>`;
     }
 
+    async function loadSuggestions() {
+      const d = await api('/proactive/suggestions');
+      $('#suggestionStats').innerHTML = [
+        { num: d.summary.score ?? '—', label: 'Hygiene score' },
+        { num: d.summary.hygieneIssues, label: 'Hygiene issues' },
+        { num: d.summary.recurringWithoutWorkspace, label: 'Recurring w/o workspace' },
+        { num: d.summary.overloadedDays, label: 'Overloaded days' },
+        { num: d.summary.focusBlocks, label: 'Focus windows' },
+      ].map(s => `<div class="stat"><div class="num">${s.num}</div><div class="label">${s.label}</div></div>`).join('');
+
+      $('#suggestionList').innerHTML = d.feed.length
+        ? d.feed.map(s => `<li>${pill(s.severity)} <span>${s.suggestion}</span></li>`).join('')
+        : `<li class="muted">No suggestions right now — your calendar and meetings look healthy.</li>`;
+    }
+
     async function load(view) {
-      ({ dashboard: loadDashboard, calendar: loadCalendar, meetings: loadMeetings, inbox: loadInbox, teams: loadTeams, people: loadPeople }[view])();
+      ({ dashboard: loadDashboard, calendar: loadCalendar, meetings: loadMeetings, inbox: loadInbox, teams: loadTeams, people: loadPeople, suggestions: loadSuggestions }[view])();
     }
 
     async function runAgent() {
