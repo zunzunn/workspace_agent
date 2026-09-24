@@ -4,7 +4,7 @@
   "description": "Meeting Agent is a full-stack AI workspace for small business teams. Its core purpose is to understand a team's meetings and help users plan, schedule, prepare for, manage, and follow up on those meetings.",
   "main": "index.js",
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
