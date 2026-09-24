@@ -6,53 +6,214 @@
   <title>Meeting Agent</title>
   <style>
     :root {
-      --bg: #0f1115; --panel: #1a1d24; --panel2: #22262f; --line: #2c313c;
-      --text: #e8eaf0; --muted: #8b93a5; --accent: #5b7cfa; --accent2: #7f9cfe;
+      --bg: #0c0e13; --panel: #151923; --panel2: #1b2130; --panel3: #212a3c;
+      --line: #252c3d; --line2: #2f3a52;
+      --text: #eef1f7; --muted: #8a93a8; --faint: #5d6679;
+      --accent: #5b7cfa; --accent2: #8aa5ff; --accent-dim: rgba(91,124,250,.14);
       --good: #3ecf8e; --warn: #f5a623; --bad: #f26d6d;
-      --radius: 12px;
+      --radius: 14px;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
-    header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 10; }
-    header .logo { font-weight: 700; font-size: 17px; }
-    header .logo span { color: var(--accent2); }
-    nav { display: flex; gap: 6px; margin-left: auto; }
-    nav button { background: transparent; color: var(--muted); border: none; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 14px; }
-    nav button.active, nav button:hover { background: var(--panel2); color: var(--text); }
-    main { max-width: 1100px; margin: 0 auto; padding: 24px; }
-    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
-    .card h3 { margin: 0 0 14px; font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
-    .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-    .stat .num { font-size: 28px; font-weight: 700; }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background:
+        radial-gradient(1200px 500px at 80% -10%, rgba(91,124,250,.12), transparent 60%),
+        radial-gradient(900px 400px at -10% 30%, rgba(62,207,142,.06), transparent 55%),
+        var(--bg);
+      color: var(--text); min-height: 100vh;
+    }
+    a { color: var(--accent2); }
+
+    /* Header */
+    header {
+      display: flex; align-items: center; gap: 18px; padding: 12px 24px;
+      border-bottom: 1px solid var(--line); background: rgba(21,25,35,.85);
+      backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 40;
+    }
+    .logo { font-weight: 800; font-size: 16px; letter-spacing: .02em; }
+    .logo span { color: var(--accent2); }
+    nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+    nav button {
+      background: transparent; color: var(--muted); border: 1px solid transparent;
+      border-radius: 10px; padding: 7px 12px; cursor: pointer; font-size: 13px; font-weight: 500;
+    }
+    nav button:hover { color: var(--text); background: var(--panel2); }
+    nav button.active { color: var(--text); background: var(--accent-dim); border-color: var(--line2); }
+    .badges { display: flex; align-items: center; gap: 8px; }
+    .badge {
+      font-size: 11px; padding: 4px 10px; border-radius: 999px;
+      border: 1px solid var(--line2); color: var(--muted); white-space: nowrap;
+    }
+    .badge.llm { color: var(--good); border-color: rgba(62,207,142,.4); background: rgba(62,207,142,.08); }
+    .badge.heuristic { color: var(--warn); border-color: rgba(245,166,35,.4); background: rgba(245,166,35,.08); }
+
+    /* Layout */
+    main { max-width: 1140px; margin: 0 auto; padding: 26px 24px 80px; }
+    .command {
+      display: flex; gap: 10px; margin-bottom: 22px;
+      background: var(--panel); border: 1px solid var(--line2); border-radius: 14px; padding: 8px;
+      box-shadow: var(--shadow);
+    }
+    .command input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-size: 14px; padding: 10px 12px;
+    }
+    .command input::placeholder { color: var(--faint); }
+    .command button {
+      background: linear-gradient(135deg, var(--accent), #4a63d6); color: #fff; border: none;
+      border-radius: 10px; padding: 10px 20px; cursor: pointer; font-weight: 600; font-size: 13px;
+    }
+    .command button:hover { filter: brightness(1.1); }
+    .command kbd {
+      font-family: var(--mono); color: var(--faint); font-size: 11px;
+      border: 1px solid var(--line2); border-radius: 6px; padding: 2px 7px; align-self: center; margin-right: 8px;
+    }
+
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .card {
+      background: linear-gradient(180deg, var(--panel2), var(--panel));
+      border: 1px solid var(--line); border-radius: var(--radius); padding: 18px;
+    }
+    .card h3 {
+      margin: 0 0 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card h3 .right { margin-left: auto; font-weight: 600; }
+    .card.clickable { cursor: pointer; transition: border-color .15s ease, transform .12s ease; }
+    .card.clickable:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .card.tight { padding: 0; overflow: hidden; }
+    .card.tight > * { padding: 14px 18px; }
+
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
+    .stat {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+      position: relative; overflow: hidden;
+    }
+    .stat::after { content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: var(--accent); opacity: .6; }
+    .stat .num { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
     .stat .label { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .stat .sub { color: var(--faint); font-size: 11px; margin-top: 2px; }
+
     ul { list-style: none; padding: 0; margin: 0; }
-    li { padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+    li { padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
     li:last-child { border-bottom: none; }
-    .time { color: var(--muted); font-size: 13px; min-width: 90px; }
-    .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
-    .pill.high { color: var(--bad); border-color: var(--bad); }
-    .pill.medium { color: var(--warn); border-color: var(--warn); }
-    .pill.low { color: var(--good); border-color: var(--good); }
-    .pill.approved { color: var(--good); border-color: var(--good); }
-    .agent-input { display: flex; gap: 10px; margin-bottom: 20px; }
-    .agent-input input { flex: 1; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 12px 14px; font-size: 14px; }
-    .agent-input button { background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 12px 18px; cursor: pointer; font-weight: 600; }
-    .slots button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin: 4px 4px 0 0; cursor: pointer; }
-    .slots button:hover { border-color: var(--accent2); }
-    .hidden { display: none; }
+    .empty { color: var(--faint); text-align: center; padding: 18px 0 !important; font-size: 13px; }
+
+    .time { color: var(--muted); font-size: 12.5px; font-family: var(--mono); min-width: 96px; }
+    .now { color: var(--good); }
     .muted { color: var(--muted); }
-    pre { white-space: pre-wrap; font-size: 12.5px; color: var(--muted); }
+    .faint { color: var(--faint); }
+    .mono { font-family: var(--mono); }
+
+    .pill { font-size: 10.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line2); color: var(--muted); white-space: nowrap; text-transform: uppercase; letter-spacing: .05em; }
+    .pill.high, .pill.red { color: var(--bad); border-color: rgba(242,109,109,.45); background: rgba(242,109,109,.08); }
+    .pill.medium, .pill.warn { color: var(--warn); border-color: rgba(245,166,35,.45); background: rgba(245,166,35,.08); }
+    .pill.low, .pill.green, .pill.approved, .pill.sent, .pill.completed, .pill.verified { color: var(--good); border-color: rgba(62,207,142,.45); background: rgba(62,207,142,.08); }
+    .pill.gray, .pill.draft, .pill.pending, .pill.in_progress { color: var(--muted); border-color: var(--line2); }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { font-size: 11.5px; padding: 3px 10px; border-radius: 999px; background: var(--panel3); border: 1px solid var(--line2); color: var(--text); }
+    .chip.owner { background: rgba(91,124,250,.14); border-color: var(--line2); }
+
+    button.ghost, button.sec, button.danger {
+      background: var(--panel3); color: var(--text); border: 1px solid var(--line2);
+      border-radius: 9px; padding: 7px 12px; cursor: pointer; font-size: 12.5px; font-weight: 500;
+    }
+    button.ghost:hover { border-color: var(--accent2); color: var(--accent2); }
+    button.sec { background: var(--accent); border-color: transparent; color: #fff; }
+    button.sec:hover { filter: brightness(1.1); }
+    button.danger:hover { border-color: var(--bad); color: var(--bad); }
+    button.mini { padding: 4px 9px; font-size: 11.5px; border-radius: 7px; }
+    button.link { background: none; border: none; color: var(--accent2); cursor: pointer; font-size: 12.5px; padding: 0; }
+
+    input[type=text], input[type=email], input[type=date], select, textarea {
+      background: var(--panel); border: 1px solid var(--line2); color: var(--text);
+      border-radius: 9px; padding: 9px 11px; font-size: 13px; outline: none;
+    }
+    input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+    .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+    .field label { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+
+    /* Day rows */
+    .day-group { margin-bottom: 16px; }
+    .day-label { font-size: 12px; letter-spacing: .06em; color: var(--accent2); font-weight: 700; margin: 6px 0 8px; text-transform: uppercase; }
+    .evt { display: flex; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--line); align-items: flex-start; }
+    .evt:last-child { border-bottom: none; }
+    .evt .icon { width: 34px; height: 34px; border-radius: 9px; background: var(--accent-dim); color: var(--accent2); display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+    .evt.conflict .icon { background: rgba(242,109,109,.12); color: var(--bad); }
+    .evt .body { flex: 1; min-width: 0; }
+    .evt .t { font-weight: 600; font-size: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .evt .meta { color: var(--faint); font-size: 12px; margin-top: 3px; }
+
+    .row { display: flex; align-items: center; gap: 8px; }
+    .row.between { justify-content: space-between; }
+    .mt8 { margin-top: 8px; } .mt12 { margin-top: 12px; } .mt16 { margin-top: 16px; }
+    .mb8 { margin-bottom: 8px; }
+
+    /* Modal */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(5,8,14,.66); backdrop-filter: blur(4px);
+      display: none; align-items: flex-start; justify-content: center; z-index: 90; padding: 40px 16px; overflow: auto;
+    }
+    .overlay.open { display: flex; }
+    .modal {
+      background: var(--panel); border: 1px solid var(--line2); border-radius: 18px;
+      box-shadow: var(--shadow); width: 640px; max-width: 100%; padding: 24px; animation: pop .14s ease;
+    }
+    @keyframes pop { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .modal h2 { margin: 0 0 4px; font-size: 18px; }
+    .modal .close { float: right; background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 120;
+      background: var(--panel3); border: 1px solid var(--line2); border-radius: 12px; padding: 12px 18px;
+      font-size: 13px; box-shadow: var(--shadow); display: none; max-width: 90vw;
+    }
+    #toast.show { display: block; }
+    #toast.err { border-color: var(--bad); color: var(--bad); }
+
+    .slots { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .slot {
+      background: var(--panel3); color: var(--text); border: 1px solid var(--line2);
+      border-radius: 9px; padding: 8px 12px; cursor: pointer; font-size: 12.5px; font-family: var(--mono);
+    }
+    .slot:hover { border-color: var(--good); color: var(--good); }
+
+    .hint { font-size: 12px; color: var(--faint); }
+    .divider { height: 1px; background: var(--line); margin: 14px 0; }
+    pre.mono { white-space: pre-wrap; font-size: 12px; color: var(--muted); font-family: var(--mono); line-height: 1.6; }
+
+    .toggle-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 8px; }
+    .daybox { text-align: center; }
+    .daybox input { accent-color: var(--accent); }
+    .daybox label { font-size: 11px; color: var(--muted); display: block; margin-top: 3px; text-transform: uppercase; }
+
+    #agentResult pre { font-size: 12.5px; }
+    .thinking { color: var(--faint); font-style: italic; }
+
+    .kcal { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .kbar { height: 26px; border-radius: 6px; background: var(--panel3); border: 1px solid var(--line2); min-width: 3px; position: relative; }
+    .kbar.peak { background: rgba(242,109,109,.55); border-color: var(--bad); }
+
     @media (prefers-reduced-motion: no-preference) {
-      .card, .stat, .agent-input button { transition: transform .12s ease, border-color .15s ease; }
-      .agent-input button:hover { transform: translateY(-1px); }
+      .card.clickable, .stat, .command button, .slot, button { transition: all .12s ease; }
+    }
+    @media (max-width: 760px) {
+      header { flex-wrap: wrap; } nav { order: 3; width: 100%; overflow-x: auto; }
+      .badges { order: 2; margin-left: auto; }
     }
   </style>
 </head>
 <body>
   <header>
     <div class="logo">Meeting <span>Agent</span></div>
+    <div class="badges">
+      <span class="badge">demo · demo_user</span>
+      <span class="badge" id="modeBadge">…</span>
+    </div>
     <nav>
       <button data-view="dashboard" class="active">Dashboard</button>
       <button data-view="calendar">Calendar</button>
@@ -64,9 +225,11 @@
       <button data-view="agents">Agents</button>
     </nav>
   </header>
+
   <main>
-    <div class="agent-input">
-      <input id="agentText" placeholder="Try: Schedule a team meeting tomorrow" onkeydown="if(event.key==='Enter')runAgent()" />
+    <div class="command">
+      <input id="agentText" placeholder="Ask the agent — e.g. “Schedule a product review on Friday”" />
+      <kbd>⏎</kbd>
       <button onclick="runAgent()">Ask Agent</button>
     </div>
     <div id="agentResult" class="hidden"></div>
@@ -81,18 +244,41 @@
     </div>
 
     <div id="view-calendar" class="hidden">
-      <div class="card"><h3>Calendar</h3><ul id="calendarList"></ul></div>
+      <div class="card mb8" style="margin-bottom:16px">
+        <h3><span>Working Preferences</span><span class="right"><button class="ghost mini" onclick="loadPreferences()">↻</button></span></h3>
+        <div class="hint">Preferred weekdays steer the agent's availability search.</div>
+        <div id="prefDays" class="toggle-grid"></div>
+        <div class="row mt12" style="gap:12px">
+          <div class="field" style="margin:0"><label>Slot step</label><select id="prefStep"><option value="15">15m</option><option value="30">30m</option><option value="60">60m</option></select></div>
+          <div class="row" style="margin-left:auto; align-self:flex-end"><button class="sec mini" onclick="savePreferences()">Save preferences</button></div>
+        </div>
+      </div>
+      <div class="card"><h3>Upcoming Calendar</h3><div id="calendarList"></div></div>
     </div>
 
     <div id="view-meetings" class="hidden">
+      <div class="card mb8" style="margin-bottom:16px">
+        <h3>New Meeting Workspace</h3>
+        <div class="row">
+          <input id="newMeetingPurpose" type="text" placeholder="Purpose, e.g. Q3 Review" style="flex:1" />
+          <button class="sec" onclick="createMeeting()">Create</button>
+        </div>
+      </div>
       <div class="grid" id="meetingsGrid"></div>
     </div>
 
     <div id="view-inbox" class="hidden">
-      <div class="card"><h3>Inbox Activity</h3><ul id="inboxList"></ul></div>
+      <div class="card"><h3>Agent Activity</h3><ul id="inboxList"></ul></div>
     </div>
 
     <div id="view-teams" class="hidden">
+      <div class="card mb8" style="margin-bottom:16px">
+        <h3>New Team</h3>
+        <div class="row">
+          <input id="newTeamName" type="text" placeholder="Team name" style="flex:1" />
+          <button class="sec" onclick="createTeam()">Create</button>
+        </div>
+      </div>
       <div class="grid" id="teamsGrid"></div>
     </div>
 
@@ -102,186 +288,550 @@
 
     <div id="view-suggestions" class="hidden">
       <div class="stats" id="suggestionStats"></div>
-      <div class="card"><h3>Suggestion Feed</h3><ul id="suggestionList"></ul></div>
+      <div class="card"><h3>Proactive Suggestion Feed</h3><ul id="suggestionList"></ul></div>
     </div>
 
     <div id="view-agents" class="hidden">
       <div class="grid" id="agentsGrid"></div>
       <div class="card" style="margin-top:16px">
-        <h3>Run a Negotiation</h3>
-        <div class="agent-input">
-          <input id="negotiateInput" placeholder="e.g. Find a time for the team sync" onkeydown="if(event.key==='Enter')runNegotiate()" />
-          <button onclick="runNegotiate()">Negotiate</button>
+        <h3>Multi-Agent Negotiation</h3>
+        <div class="row">
+          <input id="negotiateInput" type="text" placeholder="e.g. Find a time for the team sync" style="flex:1" />
+          <button class="sec" onclick="runNegotiate()">Negotiate</button>
         </div>
-        <pre id="negotiateOut" class="muted">Specialist agents will propose, object, and agree on a slot.</pre>
+        <pre id="negotiateOut" class="mono mt8">Specialists propose, object, and agree on a slot.</pre>
       </div>
-      <div class="card" style="margin-top:16px"><h3>Outbox</h3><ul id="outboxList"></ul></div>
+      <div class="card" style="margin-top:16px"><h3>Outbox<span class="right hint" id="outboxCount"></span></h3><ul id="outboxList"></ul></div>
     </div>
   </main>
 
-  <script>
-    const $ = (sel) => document.querySelector(sel);
+  <div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" id="modalBox"></div>
+  </div>
+  <div id="toast"></div>
 
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const ESC = { '&quot;': '"', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&#39;': "'" };
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const fmtTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const fmtDate = (iso) => new Date(iso).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    const isToday = (iso) => { const d = new Date(iso), n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate(); };
+    const pill = (s) => `<span class="pill ${s}">${esc(s)}</span>`;
+
+    // ---- api + toast ----
+    async function api(path, opts = {}) {
+      const r = await fetch(path, opts);
+      let json = {};
+      try { json = await r.json(); } catch {}
+      if (!r.ok && r.status !== 200) {
+        const msg = json.error || `${r.status} ${r.statusText}`;
+        throw new Error(msg);
+      }
+      return json;
+    }
+    let toastTimer;
+    function toast(msg, err) {
+      const t = $('#toast');
+      t.textContent = msg;
+      t.className = err ? 'show err' : 'show';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => (t.className = ''), 3200);
+    }
+
+    // ---- modal ----
+    function openModal(html) { $('#modalBox').innerHTML = html; $('#overlay').classList.add('open'); }
+    function closeModal() { $('#overlay').classList.remove('open'); }
+
+    // ---- nav ----
     document.querySelectorAll('nav button').forEach(b => {
       b.onclick = () => {
         document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
-        const view = b.dataset.view;
         document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
-        $('#view-' + view).classList.remove('hidden');
-        if (view !== 'dashboard') load(view);
+        $('#view-' + b.dataset.view).classList.remove('hidden');
+        if (b.dataset.view !== 'dashboard') load(b.dataset.view);
       };
     });
 
-    const pill = (s) => `<span class="pill ${s}">${s}</span>`;
-
-    async function api(path, opts) {
-      const r = await fetch(path, opts);
-      return r.json();
+    const loaders = {
+      dashboard: loadDashboard, calendar: loadCalendar, meetings: loadMeetings, inbox: loadInbox,
+      teams: loadTeams, people: loadPeople, suggestions: loadSuggestions, agents: loadAgents,
+    };
+    function load(view) { loaders[view]().catch(e => toast('Loading ' + view + ' failed: ' + e.message, true)); }
+    async function refresh() {
+      await Promise.all([loadDashboard(), loadInbox()]).catch(() => {});
     }
 
+    // ---- dashboard ----
     async function loadDashboard() {
       const d = await api('/dashboard');
+      const hy = await api('/proactive/suggestions').catch(() => ({ summary: {} }));
       $('#statRow').innerHTML = [
-        { num: d.stats.meetingsToday, label: 'Meetings today' },
-        { num: d.stats.pendingApprovals, label: 'Pending approvals' },
-        { num: d.stats.openActionItems, label: 'Open actions' },
-      ].map(s => `<div class="stat"><div class="num">${s.num}</div><div class="label">${s.label}</div></div>`).join('');
+        { num: d.stats.meetingsToday, label: 'Meetings today', sub: 'on your calendar' },
+        { num: d.stats.pendingApprovals, label: 'Awaiting approval', sub: 'agent proposals' },
+        { num: d.stats.openActionItems, label: 'Open actions', sub: 'across workspaces' },
+        { num: hy.summary.score ?? '—', label: 'Meeting hygiene', sub: 'proactive score', cls: 'score' },
+      ].map(s => `<div class="stat"><div class="num">${s.num}</div><div class="label">${s.label}</div><div class="sub">${s.sub}</div></div>`).join('');
 
       $('#agendaList').innerHTML = d.todayEvents.length
-        ? d.todayEvents.map(e => `<li><span class="time">${e.start.slice(11, 16)}</span> <strong>${e.title}</strong> <span class="muted">· ${e.attendees} attendees</span></li>`).join('')
-        : `<li class="muted">No meetings scheduled today.</li>`;
+        ? d.todayEvents.map(e => `<li><span class="time ${isToday(e.start) ? 'now' : ''}">${fmtTime(e.start)}</span><strong>${esc(e.title)}</strong><span class="muted">· ${e.attendees} attendee${e.attendees === 1 ? '' : 's'}</span></li>`).join('')
+        : `<li class="empty">No meetings scheduled today.</li>`;
 
       $('#approvalList').innerHTML = d.pendingApprovals.length
-        ? d.pendingApprovals.map(a => `<li>${pill(a.riskLevel)} <span>${a.summary}</span></li>`).join('')
-        : `<li class="muted">No pending approvals. Your calendar is quiet.</li>`;
+        ? d.pendingApprovals.map(a => `
+            <li style="align-items:flex-start">
+              <div style="flex:1; min-width:0">
+                <div class="row"><span class="pill ${a.riskLevel}">${a.riskLevel}</span>${pill(a.actionType)}</div>
+                <div class="mt8">${esc(a.summary)}</div>
+                <div class="row mt8">
+                  <button class="link" onclick="expandApproval('${a.id}')">Review &amp; approve</button>
+                  <button class="link" style="color:var(--bad)" onclick="rejectRun('${a.id}')">Reject</button>
+                </div>
+                <div id="slots-${a.id}" class="slots"></div>
+                <div class="hint">${new Date(a.createdAt).toLocaleString()}</div>
+              </div>
+            </li>`).join('')
+        : `<li class="empty">No pending approvals. Your calendar is quiet.</li>`;
 
       $('#actionList').innerHTML = d.openActions.length
-        ? d.openActions.map(a => `<li><span class="time">${a.due ? a.due.slice(0, 10) : 'no due date'}</span> ${a.text}<div class="muted">▸ ${a.meeting}</div></li>`).join('')
-        : `<li class="muted">Nothing to follow up. 🎉</li>`;
+        ? d.openActions.map(a => `<li style="align-items:flex-start"><span class="time">${a.due ? a.due.slice(0, 10) : 'no due'}</span><div><div>${esc(a.text)}</div><div class="hint">▸ ${esc(a.meeting)}</div></div></li>`).join('')
+        : `<li class="empty">Nothing to follow up. All clear.</li>`;
     }
 
+    async function expandApproval(id) {
+      const box = $('#slots-' + id);
+      if (box.dataset.open) { box.innerHTML = ''; box.dataset.open = ''; return; }
+      box.dataset.open = '1';
+      try {
+        const { run } = await api('/agent/runs/' + id);
+        const slots = (run.proposal.candidateSlots || []).slice(0, 5);
+        if (!slots.length) { box.innerHTML = `<span class="hint">No candidate slots — approve will use the proposed time.</span>`; return; }
+        box.innerHTML = slots.map(s =>
+          `<button class="slot" onclick="approveRun('${id}', '${esc(s.start)}', '${esc(s.end)}')">${fmtTime(s.start)}–${fmtTime(s.end)}</button>`
+        ).join('');
+      } catch (e) { toast('Could not load slots: ' + e.message, true); }
+    }
+    async function approveRun(id, start, end) {
+      await api('/agent/runs/' + id + '/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ selectedSlot: { start, end } }) });
+      toast('Executed and verified.');
+      refresh();
+    }
+    async function rejectRun(id) {
+      await api('/agent/runs/' + id + '/reject', { method: 'POST' });
+      toast('Proposal rejected.');
+      refresh();
+    }
+
+    // ---- calendar ----
+    let eventsCache = [];
     async function loadCalendar() {
-      const d = await api('/calendar/events');
-      $('#calendarList').innerHTML = d.events
-        .filter(e => new Date(e.end) > new Date())
-        .slice(0, 20)
-        .map(e => `<li><span class="time">${e.start.slice(5, 16)}</span> <strong>${e.title}</strong></li>`).join('') || `<li class="muted">No upcoming events.</li>`;
+      const [ev, prefs] = await Promise.all([
+        api('/calendar/events').then(j => j.events || []),
+        api('/calendar/preferences').then(j => j.preferences || {}),
+      ]);
+      eventsCache = ev;
+
+      renderPrefs(prefs);
+
+      const upcoming = ev.filter(e => !e.allDay && new Date(e.end) > new Date()).sort((a, b) => a.start.localeCompare(b.start));
+      // mark conflicts on the fly
+      const conflicts = new Set();
+      for (let i = 0; i < upcoming.length; i++) {
+        for (let j = i + 1; j < upcoming.length; j++) {
+          if (upcoming[i].start < upcoming[j].end && upcoming[j].start < upcoming[i].end) {
+            conflicts.add(upcoming[i].id); conflicts.add(upcoming[j].id);
+          }
+        }
+      }
+      const byDay = new Map();
+      for (const e of upcoming) {
+        const k = e.start.slice(0, 10);
+        if (!byDay.has(k)) byDay.set(k, []);
+        byDay.get(k).push(e);
+      }
+      $('#calendarList').innerHTML = [...byDay.entries()].slice(0, 14).map(([day, list]) => `
+        <div class="day-group">
+          <div class="day-label">${fmtDate(day + 'T12:00:00')}</div>
+          ${list.map(e => evtRow(e, conflicts.has(e.id))).join('')}
+        </div>`).join('') || `<div class="empty">No upcoming events.</div>`;
     }
 
+    function evtRow(e, conflict) {
+      const recur = Array.isArray(e.recurrence) && e.recurrence.length && e.recurrence[0].includes('RRULE');
+      return `
+        <div class="evt ${conflict ? 'conflict' : ''}">
+          <div class="icon">${conflict ? '⚑' : '▤'}</div>
+          <div class="body">
+            <div class="t">${esc(e.title)}
+              ${recur ? `<span class="pill">recurring</span>` : ''}
+              ${conflict ? pill('conflict') : ''}
+            </div>
+            <div class="meta">${fmtTime(e.start)} – ${fmtTime(e.end)}${e.attendees?.length ? ' · ' + e.attendees.length + ' attendee' + (e.attendees.length === 1 ? '' : 's') : ''}</div>
+          </div>
+          <button class="ghost mini" onclick="openReschedule('${e.id}')">Reschedule</button>
+        </div>`;
+    }
+
+    async function openReschedule(id) {
+      const ev = eventsCache.find(x => x.id === id);
+      if (!ev) return;
+      openModal(`
+        <button class="close" onclick="closeModal()">×</button>
+        <h2>Reschedule — ${esc(ev.title)}</h2>
+        <div class="hint">Currently ${fmtTime(ev.start)} → ${fmtTime(ev.end)}.</div>
+        <div class="field mt16"><label>New date</label><input id="rsDate" type="date" value="${ev.start.slice(0, 10)}" /></div>
+        <div class="field"><label>Duration (minutes)</label><input id="rsDur" type="text" value="${Math.round((new Date(ev.end) - new Date(ev.start)) / 60000)}" /></div>
+        <div class="row mt8">
+          <button class="sec" onclick="doReschedule('${id}')">Find next free slot</button>
+          <button class="ghost" onclick="closeModal()">Cancel</button>
+        </div>
+        <div class="hint mt8">Uses the agent's availability search — conflicts are reported rather than silently created.</div>
+      `);
+    }
+    async function doReschedule(id) {
+      const date = $('#rsDate').value;
+      const durationMin = parseInt($('#rsDur').value, 10) || 30;
+      if (!date) return toast('Pick a date', true);
+      try {
+        const r = await api('/calendar/events/' + id + '/reschedule', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ start: date + 'T09:00:00.000Z', end: date + 'T09:00:00.000Z', durationMin, mode: 'next', allowConflict: false }),
+        });
+        closeModal();
+        toast(`Moved to ${fmtTime(r.event.start)} on ${date}.`);
+        load('calendar');
+      } catch (e) {
+        toast(e.message, true);
+      }
+    }
+
+    function renderPrefs(prefs) {
+      const sel = new Set(prefs.preferredDays || ['mon', 'tue', 'wed', 'thu', 'fri']);
+      const short = { sun: 'Su', mon: 'Mo', tue: 'Tu', wed: 'We', thu: 'Th', fri: 'Fr', sat: 'Sa' };
+      $('#prefDays').innerHTML = Object.entries(short).map(([k, v]) => `
+        <div class="daybox">
+          <input type="checkbox" id="day-${k}" ${sel.has(k) ? 'checked' : ''} />
+          <label for="day-${k}">${v}</label>
+        </div>`).join('');
+      $('#prefStep').value = String(prefs.stepMin || 30);
+    }
+    function savePreferences() {
+      const preferredDays = Object.keys({ sun:1, mon:1, tue:1, wed:1, thu:1, fri:1, sat:1 })
+        .filter(k => $('#day-' + k).checked)
+        .map(k => k.slice(0, 3));
+      api('/calendar/preferences', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ preferredDays, stepMin: parseInt($('#prefStep').value, 10) || 30 }) })
+        .then(() => toast('Preferences saved — the agent availability search now respects them.'))
+        .catch(e => toast(e.message, true));
+    }
+    function loadPreferences() { api('/calendar/preferences').then(j => renderPrefs(j.preferences || {})).catch(() => {}); }
+
+    // ---- meetings ----
     async function loadMeetings() {
       const d = await api('/meetings');
-      $('#meetingsGrid').innerHTML = d.meetings.map(m => `
-        <div class="card"><h3>${m.purpose || 'Meeting'}</h3>
-          <div class="muted">${m.actionItems.length} open action(s) · ${m.decisions.length} decision(s)</div>
-          <ul>${m.actionItems.slice(0, 3).map(a => `<li>✅ ${a.text}</li>`).join('') || '<li class="muted">No action items yet.</li>'}</ul>
-        </div>`).join('') || `<div class="card"><h3>No meetings</h3><p class="muted">Create your first meeting workspace.</p></div>`;
+      $('#meetingsGrid').innerHTML = d.meetings.length
+        ? d.meetings.map(m => `
+            <div class="card clickable" onclick="openMeeting('${m.id}')">
+              <h3>${esc(m.purpose || 'Meeting')}<span class="right pill ${m.followUpState === 'active' ? 'green' : 'gray'}">${m.followUpState}</span></h3>
+              <div class="row mb8"><span class="chip">${m.actionItems.length} open action${m.actionItems.length === 1 ? '' : 's'}</span><span class="chip">${m.decisions.length} decision${m.decisions.length === 1 ? '' : 's'}</span></div>
+              <ul>${m.actionItems.slice(0, 3).map(a => `<li>☑ ${esc(a.text)} <span class="muted">· ${esc(a.owner || 'unassigned')}</span></li>`).join('') || `<li class="empty">No action items captured yet.</li>`}</ul>
+            </div>`).join('')
+        : `<div class="card"><h3>No meetings</h3><p class="muted">Create a workspace above to start capturing decisions and follow-ups.</p></div>`;
     }
 
+    async function createMeeting() {
+      const goal = $('#newMeetingPurpose').value.trim();
+      if (!goal) return toast('Enter a purpose first', true);
+      try {
+        await api('/meetings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purpose: goal, agenda: [goal] }) });
+        $('#newMeetingPurpose').value = '';
+        toast('Workspace created.');
+        load('meetings');
+      } catch (e) { toast(e.message, true); }
+    }
+
+    async function openMeeting(id) {
+      const { meeting, calendarEvent } = await api('/meetings/' + id);
+      let brief = null;
+      try { brief = JSON.parse(meeting.preparation || 'null'); } catch {}
+      const briefHtml = brief ? `
+        <div class="field"><label>Brief · generated by ${esc(brief.generatedBy || 'heuristic')}</label>
+          <div class="card" style="padding:12px">
+            <div><strong>Objectives</strong><ul>${brief.objectives.map(o => `<li>▸ ${esc(o)}</li>`).join('')}</ul></div>
+            <div><strong>Discussion points</strong><ul>${brief.discussionPoints.map(o => `<li>▸ ${esc(o)}</li>`).join('')}</ul></div>
+            ${brief.carryForward?.length ? `<div><strong>Carry forward</strong><ul>${brief.carryForward.map(o => `<li>▸ ${esc(o)}</li>`).join('')}</ul></div>` : ''}
+            ${brief.recommendedPreparation?.length ? `<div><strong>Prep</strong><ul>${brief.recommendedPreparation.map(o => `<li>▸ ${esc(o)}</li>`).join('')}</ul></div>` : ''}
+            <div class="mt8 hint">Estimated outcome: ${esc(brief.estimatedOutcome || '')}</div>
+          </div>
+        </div>` : `<div class="row mt12"><button class="sec" id="genBrief" onclick="generateBrief('${id}')">Generate brief</button><span class="hint">"${esc(meeting.purpose || 'Meeting')}"</span></div>`;
+
+      openModal(`
+        <button class="close" onclick="closeModal()">×</button>
+        <h2>${esc(meeting.purpose || 'Meeting workspace')}</h2>
+        ${calendarEvent ? `<div class="hint">Linked event: ${esc(calendarEvent.title)} · ${fmtDate(calendarEvent.start)} ${fmtTime(calendarEvent.start)}</div>` : `<div class="hint">No linked calendar event.</div>`}
+        ${meeting.agenda?.length ? `<div class="chips mt8">${meeting.agenda.map(a => `<span class="chip">${esc(a)}</span>`).join('')}</div>` : ''}
+
+        <div class="divider"></div>
+        <div id="briefZone">${briefHtml}</div>
+
+        <div class="divider"></div>
+        <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Decisions</div>
+        <ul id="decisionList">${renderDecisions(meeting.decisions)}</ul>
+
+        <div class="divider"></div>
+        <div class="row between"><h3 style="margin:0;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Action items</h3><span class="hint">tap ☐ to toggle</span></div>
+        <ul id="actionListD">${renderActions(meeting.actionItems, id)}</ul>
+
+        <div class="divider"></div>
+        <h3 style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Meeting notes</h3>
+        <textarea id="notesInput" rows="5" style="width:100%" placeholder="Paste transliterated notes…">${esc(meeting.notes || '')}</textarea>
+        <div class="row mt8"><button class="sec" onclick="extractNotes('${id}')">Extract decisions &amp; actions</button></div>
+      `);
+    }
+    const renderDecisions = (list) => (list.length ? list.map(x => `<li>◆ ${esc(x)}</li>`).join('') : `<li class="empty">No decisions recorded.</li>`);
+    const renderActions = (list, id) => (list.length ? list.map((a, i) => `
+      <li>
+        <span style="cursor:pointer" onclick="toggleAction('${id}', ${i})">${a.done ? '☑' : '☐'}</span>
+        <span style="${a.done ? 'text-decoration:line-through;color:var(--faint)' : ''}">${esc(a.text)}</span>
+        <span class="chip owner">${esc(a.owner || 'unassigned')}</span>
+        ${a.due ? `<span class="time">${esc(String(a.due).slice(0, 10))}</span>` : ''}
+      </li>`).join('') : `<li class="empty">No action items yet.</li>`);
+
+    async function generateBrief(id) {
+      const zone = $('#briefZone');
+      zone.innerHTML = `<span class="thinking">Generating brief…</span>`;
+      const { brief } = await api('/meetings/' + id + '/prepare', { method: 'POST' });
+      const h = `
+        <div class="field"><label>Brief · generated by ${esc(brief.generatedBy || 'heuristic')}</label>
+          <div class="card" style="padding:12px">
+            <div><strong>Objectives</strong><ul>${brief.objectives.map(o => `<li>▸ ${esc(o)}</li>`).join('')}</ul></div>
+            <div><strong>Discussion points</strong><ul>${brief.discussionPoints.map(o => `<li>▸ ${esc(o)}</li>`).join('')}</ul></div>
+            ${brief.carryForward?.length ? `<div><strong>Carry forward</strong><ul>${brief.carryForward.map(o => `<li>▸ ${esc(o)}</li>`).join('')}</ul></div>` : ''}
+            ${brief.recommendedPreparation?.length ? `<div><strong>Prep</strong><ul>${brief.recommendedPreparation.map(o => `<li>▸ ${esc(o)}</li>`).join('')}</ul></div>` : ''}
+            <div class="mt8 hint">Estimated outcome: ${esc(brief.estimatedOutcome || '')}</div>
+          </div>
+        </div>`;
+      zone.innerHTML = h;
+    }
+
+    async function extractNotes(id) {
+      const notes = $('#notesInput').value.trim();
+      if (!notes) return toast('Add some notes first', true);
+      try {
+        const r = await api('/meetings/' + id + '/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notes }) });
+        $('#decisionList').innerHTML = renderDecisions(r.decisions || []);
+        $('#actionListD').innerHTML = renderActions(r.actionItems || [], id);
+        toast(`Extracted ${r.decisions.length} decision(s) and ${r.actionItems.length} action item(s).`);
+      } catch (e) { toast(e.message, true); }
+    }
+    async function toggleAction(id, idx) {
+      const { meeting } = await api('/meetings/' + id);
+      const list = meeting.actionItems.slice();
+      list[idx].done = !list[idx].done;
+      const r = await api('/meetings/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actionItems: list }) });
+      $('#actionListD').innerHTML = renderActions(r.meeting.actionItems, id);
+      loadDashboard();
+    }
+
+    // ---- inbox ----
     async function loadInbox() {
       const d = await api('/inbox');
       $('#inboxList').innerHTML = d.activity.length
-        ? d.activity.map(a => `<li>${pill(a.riskLevel)} <span>${a.title}</span> <span class="muted">— ${a.status} · ${a.execution} · ${a.verification}</span></li>`).join('')
-        : `<li class="muted">No agent activity yet.</li>`;
+        ? d.activity.map(a => `<li style="align-items:flex-start"><div style="flex:1;min-width:0"><div class="row">${pill(a.riskLevel)}<span>${esc(a.title)}</span></div><div class="hint mt8">${pill(a.status)} ${pill(a.execution)} ${pill(a.verification)} · ${new Date(a.createdAt).toLocaleString()}</div></div></li>`).join('')
+        : `<li class="empty">No agent activity yet.</li>`;
     }
 
+    // ---- teams ----
     async function loadTeams() {
       const d = await api('/teams');
-      $('#teamsGrid').innerHTML = d.teams.map(t => `
-        <div class="card"><h3>${t.name}</h3>
-          <div class="muted">${t.description || ''} · ${t.member_count} member(s)</div>
-        </div>`).join('') || `<div class="card"><h3>No teams</h3><p class="muted">Create a team to get started.</p></div>`;
+      $('#teamsGrid').innerHTML = d.teams.length
+        ? d.teams.map(t => `
+            <div class="card">
+              <h3>${esc(t.name)}<span class="right pill">${t.member_count} members</span></h3>
+              ${t.description ? `<div class="muted mb8">${esc(t.description)}</div>` : ''}
+              <div class="chips mb8" id="members-${t.id}"><span class="faint">loading…</span></div>
+              <div class="row mt8">
+                <input type="email" id="addmem-${t.id}" placeholder="email@company.com" style="flex:1;font-size:12.5px" />
+                <button class="sec mini" onclick="addMember('${t.id}')">+ Add</button>
+              </div>
+            </div>`).join('')
+        : `<div class="card"><h3>No teams</h3><p class="muted">Create a team to organize your workspace.</p></div>`;
+      d.teams.forEach(t => loadTeamMembers(t));
+    }
+    async function loadTeamMembers(t) {
+      const { members } = await api('/teams/' + t.id + '/members');
+      $('#members-' + t.id).innerHTML = members.length
+        ? members.map(m => `<span class="chip" title="${esc(m.email)}">${esc(m.name)} <span class="faint">· ${esc(m.role)}</span> <a href="#" style="color:var(--bad)" onclick="event.preventDefault();removeMember('${t.id}','${m.id}')">✕</a></span>`).join('')
+        : `<span class="faint">No members.</span>`;
+    }
+    async function addMember(tid) {
+      const email = $('#addmem-' + tid).value.trim();
+      if (!email) return;
+      try {
+        await api('/teams/' + tid + '/members', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+        $('#addmem-' + tid).value = '';
+        toast('Member added.');
+        load('teams');
+      } catch (e) { toast(e.message, true); }
+    }
+    async function removeMember(tid, uid) {
+      await api('/teams/' + tid + '/members/' + uid, { method: 'DELETE' });
+      toast('Member removed.');
+      load('teams');
+    }
+    async function createTeam() {
+      const name = $('#newTeamName').value.trim();
+      if (!name) return toast('Enter a team name', true);
+      try {
+        await api('/teams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+        $('#newTeamName').value = '';
+        load('teams');
+      } catch (e) { toast(e.message, true); }
     }
 
+    // ---- people ----
     async function loadPeople() {
       const d = await api('/people');
-      $('#peopleGrid').innerHTML = d.people.map(p => `
-        <div class="card"><h3>${p.name}</h3>
-          <div class="muted">${p.role} · ${p.email}</div>
-          <div class="muted">Timezone: ${p.timezone} · Teams: ${p.teams.map(t => t.name).join(', ')}</div>
-        </div>`).join('') || `<div class="card"><h3>No teammates</h3><p class="muted">Add team members to see them here.</p></div>`;
+      $('#peopleGrid').innerHTML = d.people.length
+        ? d.people.map(p => `
+            <div class="card clickable" onclick="openPerson('${p.id}')">
+              <h3>${esc(p.name)}<span class="right pill">${esc(p.role)}</span></h3>
+              <div class="muted">${esc(p.email)}</div>
+              <div class="muted">Timezone: ${esc(p.timezone)}</div>
+              <div class="chips mt8">${p.teams.map(t => `<span class="chip">${esc(t.name)}</span>`).join('')}</div>
+              <div class="hint mt8" id="person-${p.id}">tap for availability &amp; context…</div>
+            </div>`).join('')
+        : `<div class="card"><h3>No teammates</h3><p class="muted">Directory is empty.</p></div>`;
+    }
+    async function openPerson(id) {
+      openModal(`<button class="close" onclick="closeModal()">×</button><h2>…</h2><div class="faint">Loading context…</div>`);
+      const { person, context } = await api('/people/' + id + '/context');
+      const prefs = context.preferences || {};
+      openModal(`
+        <button class="close" onclick="closeModal()">×</button>
+        <h2>${esc(person.name)}</h2>
+        <div class="hint">${esc(person.email)} · ${esc(person.timezone)} · ${esc(person.role)}</div>
+        <div class="divider"></div>
+        <div class="stats mt8" style="grid-template-columns:repeat(3,1fr)">
+          <div class="stat"><div class="num">${context.availableHoursThisWeek ?? '—'}</div><div class="label">Free hrs/week</div></div>
+          <div class="stat"><div class="num">${context.upcomingEvents}</div><div class="label">Upcoming events</div></div>
+          <div class="stat"><div class="num">${context.activeMeetings.length}</div><div class="label">Active meetings</div></div>
+        </div>
+        <div class="mt12 hmb8"><strong>Preferred days</strong></div>
+        <div class="chips">${(prefs.preferredDays || []).map(x => `<span class="chip">${esc(x)}</span>`).join('') || '<span class="faint">none set</span>'}</div>
+        <div class="mt12"><strong>Open work across meetings</strong></div>
+        <ul>${context.activeMeetings.map(m => `<li>${esc(m.purpose)} <span class="chip">${m.openActions} open</span></li>`).join('') || '<li class="empty">Nothing open.</li>'}</ul>
+        ${!context.calendarConnected ? `<div class="hint">No connected calendar — availability is unknown.</div>` : ''}
+      `);
     }
 
+    // ---- suggestions ----
     async function loadSuggestions() {
       const d = await api('/proactive/suggestions');
       $('#suggestionStats').innerHTML = [
         { num: d.summary.score ?? '—', label: 'Hygiene score' },
-        { num: d.summary.hygieneIssues, label: 'Hygiene issues' },
-        { num: d.summary.recurringWithoutWorkspace, label: 'Recurring w/o workspace' },
-        { num: d.summary.overloadedDays, label: 'Overloaded days' },
-        { num: d.summary.focusBlocks, label: 'Focus windows' },
+        { num: d.summary.hygieneIssues ?? 0, label: 'Hygiene issues' },
+        { num: d.summary.recurringWithoutWorkspace ?? 0, label: 'Recurring w/o workspace' },
+        { num: d.summary.overloadedDays ?? 0, label: 'Overloaded days' },
+        { num: d.summary.focusBlocks ?? 0, label: 'Focus windows' },
       ].map(s => `<div class="stat"><div class="num">${s.num}</div><div class="label">${s.label}</div></div>`).join('');
-
       $('#suggestionList').innerHTML = d.feed.length
-        ? d.feed.map(s => `<li>${pill(s.severity)} <span>${s.suggestion}</span></li>`).join('')
-        : `<li class="muted">No suggestions right now — your calendar and meetings look healthy.</li>`;
+        ? d.feed.map(s => `<li style="align-items:flex-start"><div style="flex:1;min-width:0"><div class="row">${pill(s.severity)}<span class="faint mono">${esc(s.kind || '')}</span></div><div class="mt8">${esc(s.suggestion)}</div>${s.meeting ? `<div class="hint">▸ ${esc(s.meeting)}</div>` : ''}</div></li>`).join('')
+        : `<li class="empty">Calendar and meetings look healthy — no suggestions.</li>`;
     }
 
+    // ---- agents ----
     async function loadAgents() {
-      const specs = await api('/ecosystem/specialists');
-      const llm = await api('/ecosystem/llm');
+      const [specs, llm, outbox] = await Promise.all([
+        api('/ecosystem/specialists'),
+        api('/ecosystem/llm'),
+        api('/ecosystem/outbox'),
+      ]);
+      const badge = $('#modeBadge');
+      badge.className = 'badge ' + (llm.configured ? 'llm' : 'heuristic');
+      badge.textContent = llm.configured ? `⚡ LLM · ${llm.provider}` : 'rules mode';
+
       $('#agentsGrid').innerHTML = specs.specialists.map(s => `
-        <div class="card"><h3>${s.name}</h3>
-          <div class="muted">${s.description}</div>
-          <div class="muted">skills: ${s.skills.join(', ')}</div>
+        <div class="card"><h3>${esc(s.name)}</h3>
+          <div class="muted">${esc(s.description)}</div>
+          <div class="chips mt8">${s.skills.map(k => `<span class="chip">${esc(k)}</span>`).join('')}</div>
         </div>`).join('') + `
         <div class="card"><h3>Intelligence</h3>
-          <div class="muted">Mode: <strong>${llm.mode}</strong>${llm.configured ? ` (${llm.provider})` : ' — deterministic rules'}</div>
+          <div>Mode: <strong>${llm.configured ? llm.provider : 'deterministic rules'}</strong></div>
+          <div class="hint mt8">Set ANTHROPIC_API_KEY or OPENAI_API_KEY to upgrade briefs, extraction, and proposals to an LLM. ${llm.configured ? 'Currently active.' : 'Nothing configured — using fallbacks.'}</div>
         </div>`;
 
-      const outbox = await api('/ecosystem/outbox');
+      $('#outboxCount').textContent = outbox.messages.length + ' message(s)';
       $('#outboxList').innerHTML = outbox.messages.length
-        ? outbox.messages.map(m => `<li>${pill(m.status)} <span>${m.kind}</span> <span class="muted">${m.to_address}</span></li>`).join('')
-        : `<li class="muted">No drafts yet.</li>`;
+        ? outbox.messages.map(m => `<li style="align-items:flex-start"><div style="flex:1;min-width:0"><div class="row">${pill(m.status)}<span>${esc(m.kind)}</span><span class="time">→ ${esc(m.to_address)}</span></div><div class="hint mt8">${esc(m.subject)}</div></div>${m.status === 'draft' ? `<button class="sec mini" onclick="sendOutbox('${m.id}')">Send</button>` : ''}</li>`).join('')
+        : `<li class="empty">No drafts yet.</li>`;
     }
-
+    async function sendOutbox(id) {
+      await api('/ecosystem/outbox/' + id + '/send', { method: 'POST' });
+      toast('Message sent (simulated).');
+      loadAgents();
+    }
     async function runNegotiate() {
       const text = $('#negotiateInput').value.trim();
       if (!text) return;
       const out = $('#negotiateOut');
       out.textContent = 'Negotiating…';
-      const r = await fetch('/ecosystem/negotiate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      const j = await r.json();
-      if (r.status !== 201) { out.textContent = j.error || 'Negotiation failed'; return; }
+      const j = await api('/ecosystem/negotiate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
       out.textContent = j.transcript.map(t => `[${t.speaker}] ${t.message}`).join('\n')
-        + `\n\nAgreed: ${new Date(j.agreement.start).toISOString()} → ${new Date(j.agreement.end).toISOString()}`;
+        + `\n\nAgreed: ${j.agreement.start} → ${j.agreement.end}`;
       loadAgents();
     }
 
-    async function load(view) {
-      ({ dashboard: loadDashboard, calendar: loadCalendar, meetings: loadMeetings, inbox: loadInbox, teams: loadTeams, people: loadPeople, suggestions: loadSuggestions, agents: loadAgents }[view])();
-    }
-
+    // ---- agent command ----
     async function runAgent() {
       const text = $('#agentText').value.trim();
       if (!text) return;
       const box = $('#agentResult');
       box.classList.remove('hidden');
-      box.innerHTML = `<div class="card"><h3>Agent</h3><p class="muted">"${text}"</p><pre>Thinking…</pre></div>`;
-      const d = await api('/agent/runs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
-      if (d.error) { box.innerHTML = `<div class="card"><h3>Agent</h3><p class="muted">${d.error}</p></div>`; return; }
-      const run = d.run;
-      const slots = (run.proposal.candidateSlots || []).slice(0, 5);
-      box.innerHTML = `
-        <div class="card"><h3>Agent Proposal ${pill(run.riskLevel)}</h3>
-        <p><strong>${run.summary}</strong></p>
-        <div class="slots">${slots.map(s => `<button onclick="approveSlot('${run.id}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">${s.start.slice(11, 16)}–${s.end.slice(11, 16)}</button>`).join('')}</div>
-        <p class="muted">Status: ${run.approvalStatus} · execution ${run.executionStatus}</p>
-        </div>`;
-      loadDashboard(); loadInbox();
+      box.innerHTML = `<div class="card"><h3>Agent</h3><pre class="thinking">“${esc(text)}”\n\nThinking…</pre></div>`;
+      try {
+        const d = await api('/agent/runs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+        const run = d.run;
+        const slots = (run.proposal.candidateSlots || []).slice(0, 5);
+        const affected = run.affectedPeople || [];
+        box.innerHTML = `
+          <div class="card">
+            <h3>Agent Proposal <span class="right">${pill(run.riskLevel)} ${pill(run.approvalStatus)}</span></h3>
+            <div style="font-size:15px;font-weight:600">${esc(run.summary)}</div>
+            ${run.proposal.title ? `<div class="hint">Meeting: ${esc(run.proposal.title)}</div>` : ''}
+            ${affected.length ? `<div class="chips mt8">${affected.map(a => `<span class="chip">${esc(a)}</span>`).join('')}</div>` : ''}
+            <div class="slots">${slots.length ? slots.map(s => `<button class="slot" onclick="approveRun('${run.id}','${esc(s.start)}','${esc(s.end)}')">${fmtTime(s.start)}–${fmtTime(s.end)}</button>`).join('') : `<span class="hint">Approve to commit the proposed slot.</span>`}</div>
+            <div class="row mt8">
+              <button class="sec mini" onclick="approveRunDefault('${run.id}')">Approve</button>
+              <button class="danger mini" onclick="rejectRun('${run.id}')">Reject</button>
+              <span class="hint">execution: ${run.executionStatus} · verification: ${run.verificationStatus}</span>
+            </div>
+          </div>`;
+        refresh();
+      } catch (e) {
+        box.innerHTML = `<div class="card"><h3>Agent</h3><div class="muted">${esc(e.message)}</div></div>`;
+      }
+    }
+    async function approveRunDefault(id) {
+      await api('/agent/runs/' + id + '/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({} ) });
+      $('#agentResult').innerHTML = `<div class="card"><h3>✅ Executed &amp; verified</h3><p class="muted">Conflicts checked, event written. Check the Calendar tab.</p></div>`;
+      refresh(); load('calendar');
     }
 
-    async function approveSlot(runId, slot) {
-      await api('/agent/runs/' + runId + '/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ selectedSlot: slot }) });
-      $('#agentResult').innerHTML = `<div class="card"><h3>✅ Executed</h3><p class="muted">Event created and verified. See Calendar tab.</p></div>`;
-      loadDashboard(); loadCalendar(); loadInbox();
-    }
-
-    loadDashboard();
+    // boot
+    (async () => {
+      loadDashboard();
+      loadPreferences();
+      try {
+        const llm = await api('/ecosystem/llm');
+        const badge = $('#modeBadge');
+        badge.className = 'badge ' + (llm.configured ? 'llm' : 'heuristic');
+        badge.textContent = llm.configured ? `⚡ LLM · ${llm.provider}` : 'rules mode';
+      } catch {}
+      $('#agentText').addEventListener('keydown', e => { if (e.key === 'Enter') runAgent(); });
+    })();
   </script>
 </body>
 </html>
