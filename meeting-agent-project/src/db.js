@@ -94,8 +94,11 @@ db.exec(`
     user_id TEXT,
     tenant_id TEXT,
     action_type TEXT,
+    summary TEXT,
+    risk_level TEXT DEFAULT 'medium',
     target TEXT,
     proposal JSONB DEFAULT '{}',
+    affected_people TEXT DEFAULT '[]',
     approval_status TEXT DEFAULT 'pending',
     execution_status TEXT DEFAULT 'pending',
     verification_status TEXT DEFAULT 'pending',
@@ -144,6 +147,17 @@ if (!calCols.includes('all_day')) {
 }
 if (!calCols.includes('status')) {
   db.exec(`ALTER TABLE calendar_events ADD COLUMN status TEXT DEFAULT 'confirmed'`);
+}
+
+const actCols = db.prepare(`PRAGMA table_info(agent_actions)`).all().map(c => c.name);
+if (!actCols.includes('summary')) {
+  db.exec(`ALTER TABLE agent_actions ADD COLUMN summary TEXT`);
+}
+if (!actCols.includes('risk_level')) {
+  db.exec(`ALTER TABLE agent_actions ADD COLUMN risk_level TEXT DEFAULT 'medium'`);
+}
+if (!actCols.includes('affected_people')) {
+  db.exec(`ALTER TABLE agent_actions ADD COLUMN affected_people TEXT DEFAULT '[]'`);
 }
 
 // Export helper functions
