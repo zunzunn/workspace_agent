@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { findAvailability, findOverlaps, expandRecurrence } = require('../src/services/calendar-service.js');
+const { parseJsonOutput } = require('../src/services/llm.js');
 const {
   prepareMeetingBrief,
   createActionItemsFromNotes,
@@ -62,24 +63,24 @@ test('findOverlaps detects overlapping events', () => {
   assert.ok(overlaps.length >= 1, 'expected at least one overlap');
 });
 
-test('extractDecisionsFromNotes captures Decision: lines', () => {
+test('extractDecisionsFromNotes captures Decision: lines', async () => {
   const notes = `
 Some discussion happened.
 Decision: Ship the new onboarding flow.
 Also talked about budgets.
 Decision: Cap the Q3 budget at 40k.
 `;
-  const { decisions } = extractDecisionsFromNotes(notes);
+  const { decisions } = await extractDecisionsFromNotes(notes);
   assert.equal(decisions.length, 2);
   assert.ok(decisions[0].includes('onboarding'));
 });
 
-test('createActionItemsFromNotes captures Action item: lines as actionable objects', () => {
+test('createActionItemsFromNotes captures Action item: lines as actionable objects', async () => {
   const notes = `
 Action item: Write the API spec.
 Action item: Book the venue
 `;
-  const actions = createActionItemsFromNotes(notes, 'demo@user.test');
+  const actions = await createActionItemsFromNotes(notes, 'demo@user.test');
   assert.equal(actions.length, 2);
   assert.ok(actions.every(a => a.text && a.done === false && a.owner === 'demo@user.test'));
 });
@@ -116,12 +117,48 @@ test('expandRecurrence returns [] for non-recurring events', () => {
   assert.deepEqual(instances, []);
 });
 
-test('prepareMeetingBrief includes objectives and discussion points', () => {
-  const brief = prepareMeetingBrief(
+test('prepareMeetingBrief includes objectives and discussion points', async () => {
+  const brief = await prepareMeetingBrief(
     { meetingId: 'mtg_1', purpose: 'Sprint Planning', agenda: ['Review goals'], recentDecisions: [], actionItems: [] },
     [{ purpose: 'Prior Sprint Planning', actionItems: [{ text: 'Use Scrum', done: 0 }] }]
   );
   assert.ok(brief.objectives && brief.objectives.length > 0);
   assert.ok(Array.isArray(brief.discussionPoints));
   assert.ok(brief.carryForward.some(c => c.includes('Scrum')));
+});
+
+test('parseJsonOutput tolerates fenced and prose-wrapped JSON', () => {
+  assert.deepEqual(parseJsonOutput('```json\n{"a":1}\n```'), { a: 1 });
+  assert.deepEqual(parseJsonOutput('Here you go: {"a":1} hope that helps'), { a: 1 });
+  assert.equal(parseJsonOutput('not json at all'), null);
+});
+
+test('LLM path is used when configured (mocked provider) and falls back on failure', async () => {
+  const llm = require('../src/services/llm.js');
+  const originalKey = process.env.ANTHROPIC_API_KEY;
+  const originalFetch = global.fetch;
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+
+  const savedConfigured = llm.isLLMConfigured();
+  assert.equal(savedConfigured, true, 'should be configured with a key set');
+
+  // Mock a successful Anthropic response
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => ({ content: [{ type: 'text', text: '{"decisions":["Mocked decision"]}' }] }),
+  });
+
+  const { extractDecisionsFromNotes } = require('../src/services/meeting-intelligence.js');
+  const withLlm = await extractDecisionsFromNotes('some notes with no explicit Decision: prefix');
+  assert.deepEqual(withLlm.decisions, ['Mocked decision']);
+
+  // Now make the provider fail → must fall back to heuristic output
+  global.fetch = async () => { throw new Error('network down'); };
+  const fallback = await extractDecisionsFromNotes('Decision: Real fallback works');
+  assert.ok(fallback.decisions.length >= 1);
+
+  // Cleanup
+  global.fetch = originalFetch;
+  if (originalKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+  else process.env.ANTHROPIC_API_KEY = originalKey;
 });

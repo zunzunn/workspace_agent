@@ -2,6 +2,7 @@ const { Router } = require('express');
 const { db } = require('../db.js');
 const MeetingOrchestrator = require('../services/orchestrator.js');
 const { getCalendarClient, findAvailability, findOverlaps } = require('../services/calendar-service.js');
+const { generateJson, isLLMConfigured } = require('../services/llm.js');
 
 const router = Router();
 
@@ -37,6 +38,28 @@ function mapRun(row) {
 
 function getConnectionForUser(userId) {
   return db.prepare(`SELECT * FROM calendar_connections WHERE user_id = ?`).get(userId);
+}
+
+// Optionally refine a schedule proposal with an LLM (falls back silently to heuristic)
+async function refineScheduleProposal(text, base) {
+  if (!isLLMConfigured()) return base;
+  const refined = await generateJson({
+    system: 'You infer meeting details from a scheduling request. Only include fields the request supports.',
+    prompt: `Request: "${text}"
+Return JSON: {"title":"short meeting title","description":"1-2 sentence description","participants":["email or name strings"]}`,
+    fallback: null,
+  });
+  if (!refined) return base;
+  return {
+    ...base,
+    proposed_changes: {
+      ...base.proposed_changes,
+      title: refined.title || base.proposed_changes.title || 'Meeting',
+      description: refined.description || base.proposed_changes.description || '',
+    },
+    affected_people: (refined.participants && refined.participants.length ? refined.participants : base.affected_people),
+    summary: refined.title || base.summary,
+  };
 }
 
 // Build a schedule proposal for a natural-language scheduling request
@@ -145,7 +168,8 @@ router.post('/runs', async (req, res) => {
     let risk = RISK_LEVELS[actionType] || 'low';
 
     if (actionType === 'schedule_meeting') {
-      const built = buildScheduleProposal(text, orchestrator);
+      let built = buildScheduleProposal(text, orchestrator);
+      built = await refineScheduleProposal(text, built);
       proposal = built.proposed_changes;
       affected = built.affected_people;
       summary = built.summary;

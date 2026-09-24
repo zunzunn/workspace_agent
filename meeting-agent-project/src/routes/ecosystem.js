@@ -4,6 +4,7 @@ const { findAvailability } = require('../services/calendar-service.js');
 const { SPECIALISTS, routeRequest } = require('../services/specialist-agents.js');
 const { negotiatedSlot } = require('../services/negotiation.js');
 const { draftMeetingFollowUp, draftFocusReminder } = require('../services/communication.js');
+const { isLLMConfigured, provider } = require('../services/llm.js');
 
 const router = Router();
 
@@ -23,6 +24,15 @@ function userPrefs(userId) {
 // GET /ecosystem/specialists — list the specialist agent registry
 router.get('/specialists', async (req, res) => {
   res.json({ specialists: SPECIALISTS });
+});
+
+// GET /ecosystem/llm — report whether LLM intelligence is configured and active
+router.get('/llm', async (req, res) => {
+  res.json({
+    configured: isLLMConfigured(),
+    provider: provider(),
+    mode: isLLMConfigured() ? 'llm' : 'heuristic',
+  });
 });
 
 // POST /ecosystem/negotiate — run multi-agent negotiation for a scheduling request

@@ -42,9 +42,17 @@ async function api(method, pathname, body) {
 before(async () => {
   // Seed the temp db before launching the server
   const projectDir = path.join(__dirname, '..');
+  const testEnv = {
+    ...process.env,
+    MEETING_AGENT_DB: dbFile,
+    // Keep tests hermetic: no LLM keys leak in, so heuristics run deterministically
+    ANTHROPIC_API_KEY: '',
+    OPENAI_API_KEY: '',
+    LLM_MODEL: '',
+  };
   const seed = spawn(process.execPath, [path.join(projectDir, 'src', 'seed.js')], {
     cwd: projectDir,
-    env: { ...process.env, MEETING_AGENT_DB: dbFile },
+    env: testEnv,
     stdio: 'pipe',
   });
   await new Promise((res, rej) => {
@@ -53,7 +61,7 @@ before(async () => {
 
   server = spawn(process.execPath, [path.join(projectDir, 'src', 'app.js')], {
     cwd: projectDir,
-    env: { ...process.env, MEETING_AGENT_DB: dbFile, PORT: String(PORT) },
+    env: { ...testEnv, PORT: String(PORT) },
     stdio: 'pipe',
   });
   server.stderr.on('data', (d) => process.stderr.write('[server] ' + d));
@@ -150,7 +158,14 @@ test('frontend is served at /', async () => {
   assert.ok(html.includes('Meeting Agent'));
 });
 
-// ---- Phase 11: advanced agent ecosystem ----
+// ---- Phase 12: LLM-powered intelligence ----
+
+test('GET /ecosystem/llm reports heuristic mode when no keys present', async () => {
+  const { status, json } = await api('GET', '/ecosystem/llm');
+  assert.equal(status, 200);
+  assert.equal(json.configured, false);
+  assert.equal(json.mode, 'heuristic');
+});
 
 test('GET /ecosystem/specialists lists the specialist registry', async () => {
   const { status, json } = await api('GET', '/ecosystem/specialists');

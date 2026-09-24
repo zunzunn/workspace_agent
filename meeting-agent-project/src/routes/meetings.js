@@ -119,7 +119,7 @@ router.post('/:id/prepare', async (req, res) => {
       SELECT * FROM meetings WHERE id != ? AND (purpose LIKE ?) 
     `).all(row.id, `%${(row.purpose || '').split(' ')[0] || ''}%`);
 
-    const brief = prepareMeetingBrief(context, prior.slice(0, 3));
+    const brief = await prepareMeetingBrief(context, prior.slice(0, 3));
 
     db.prepare(`UPDATE meetings SET preparation = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
       .run(JSON.stringify(brief), row.id);
@@ -176,8 +176,8 @@ router.post('/:id/notes', async (req, res) => {
     const { notes } = req.body;
     if (!notes) return res.status(400).json({ error: 'notes is required' });
 
-    const extracted = extractDecisionsFromNotes(notes);
-    const actions = createActionItemsFromNotes(notes, req.user.email);
+    const extracted = await extractDecisionsFromNotes(notes);
+    const actions = await createActionItemsFromNotes(notes, req.user.email);
 
     db.prepare(`UPDATE meetings SET notes = ?, decisions = ?, action_items = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
       .run(

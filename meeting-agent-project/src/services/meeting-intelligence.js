@@ -1,24 +1,52 @@
 /**
  * Meeting intelligence: preparation briefs, decision extraction, and action-item generation.
- * Deterministic for the demo; each entry point is structured so an LLM can be swapped in.
+ * Deterministic for the demo; each entry point optionally upgrades to an LLM and
+ * falls back to the deterministic path when no LLM is configured or the call fails.
  */
 
-function prepareMeetingBrief(context, priorMeetings) {
+const { generateJson, isLLMConfigured } = require('./llm.js');
+
+async function prepareMeetingBrief(context, priorMeetings) {
   const { purpose, agenda, actionItems } = context;
 
-  // Objectives: from purpose text
+  if (isLLMConfigured()) {
+    const llm = await generateJson({
+      system: 'You are a meeting-coach specialist. Fill gaps in a preparation brief with concrete, specific suggestions drawn ONLY from the provided meeting context.',
+      prompt: `Build a preparation brief for a meeting.
+Purpose: "${purpose}"
+Agenda: ${JSON.stringify(agenda || [])}
+Open action items: ${JSON.stringify((actionItems || []).filter(a => !a.done))}
+Prior meetings: ${JSON.stringify((priorMeetings || []).slice(0, 3).map(p => ({ purpose: p.purpose, decisions: p.decisions, actionItems: p.actionItems })))}
+
+Return JSON:
+{"objectives":["..."],"discussionPoints":["..."],"carryForward":["..."],"recommendedPreparation":["..."],"estimatedOutcome":"..."}`,
+      fallback: null,
+    });
+    if (llm && Array.isArray(llm.objectives) && Array.isArray(llm.discussionPoints) && (
+      llm.objectives.length || llm.discussionPoints.length || llm.carryForward?.length
+    )) {
+      return {
+        objectives: llm.objectives.slice(0, 5),
+        discussionPoints: (llm.discussionPoints || []).slice(0, 8),
+        carryForward: (llm.carryForward || []).slice(0, 5),
+        recommendedPreparation: (llm.recommendedPreparation || []).slice(0, 5),
+        estimatedOutcome: llm.estimatedOutcome || 'Decisions recorded, action items assigned',
+        generatedBy: 'llm',
+      };
+    }
+  }
+
+  // Deterministic fallback
   const objectives = purpose
     ? purpose.split(/[.,;]/).map(s => s.trim()).filter(Boolean).slice(0, 3)
     : ['Review current status', 'Align on next steps'];
 
-  // Suggested discussion points: from the agenda plus open follow-up items
   const openActions = (actionItems || []).filter(a => !a.done);
   const discussionPoints = [
     ...(agenda || []),
     ...openActions.map(a => `Follow up: ${a.text}`),
   ];
 
-  // Digest of prior meetings: carry forward unresolved items
   const carryForward = [];
   for (const prior of priorMeetings || []) {
     for (const item of prior.actionItems || []) {
@@ -38,11 +66,27 @@ function prepareMeetingBrief(context, priorMeetings) {
       'Confirm attendee readiness',
     ],
     estimatedOutcome: 'Decisions recorded, action items assigned with owners and due dates',
+    generatedBy: 'heuristic',
   };
 }
 
-function extractDecisionsFromNotes(notes) {
+async function extractDecisionsFromNotes(notes) {
   if (!notes) return { decisions: [] };
+
+  if (isLLMConfigured()) {
+    const llm = await generateJson({
+      system: 'You extract decisions from meeting notes. Preserve meaning and one decision per entry.',
+      prompt: `Meeting notes:
+---
+${notes}
+---
+Return JSON: {"decisions":["decision text","..."]}\nReturn [] if nothing is a real decision.`,
+      fallback: null,
+    });
+    if (llm && Array.isArray(llm.decisions)) {
+      return { decisions: llm.decisions.map(d => String(d).trim()).filter(Boolean) };
+    }
+  }
 
   const lines = notes.split(/\n+/).map(l => l.trim()).filter(Boolean);
   const decisions = [];
@@ -63,8 +107,32 @@ function extractDecisionsFromNotes(notes) {
   return { decisions };
 }
 
-function createActionItemsFromNotes(notes, defaultOwner) {
+async function createActionItemsFromNotes(notes, defaultOwner) {
   if (!notes) return [];
+
+  if (isLLMConfigured()) {
+    const llm = await generateJson({
+      system: 'You turn meeting notes into action items. Only include genuine commitments; include owner and due when stated.',
+      prompt: `Meeting notes:
+---
+${notes}
+---
+Default owner: ${defaultOwner}
+Return JSON: {"actionItems":[{"text":"...","owner":"... or empty","due":"YYYY-MM-DD or null"}...]}\nReturn [] if there are none.`,
+      fallback: null,
+    });
+    if (llm && Array.isArray(llm.actionItems)) {
+      return llm.actionItems
+        .filter(a => a && a.text)
+        .map(a => ({
+          id: `ai_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+          text: String(a.text).trim(),
+          owner: (a.owner || defaultOwner || '').trim(),
+          due: a.due || null,
+          done: false,
+        }));
+    }
+  }
 
   const lines = notes.split(/\n+/).map(l => l.trim()).filter(Boolean);
   const actions = [];

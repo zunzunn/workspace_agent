@@ -219,11 +219,15 @@
 
     async function loadAgents() {
       const specs = await api('/ecosystem/specialists');
+      const llm = await api('/ecosystem/llm');
       $('#agentsGrid').innerHTML = specs.specialists.map(s => `
         <div class="card"><h3>${s.name}</h3>
           <div class="muted">${s.description}</div>
           <div class="muted">skills: ${s.skills.join(', ')}</div>
-        </div>`).join('');
+        </div>`).join('') + `
+        <div class="card"><h3>Intelligence</h3>
+          <div class="muted">Mode: <strong>${llm.mode}</strong>${llm.configured ? ` (${llm.provider})` : ' — deterministic rules'}</div>
+        </div>`;
 
       const outbox = await api('/ecosystem/outbox');
       $('#outboxList').innerHTML = outbox.messages.length
