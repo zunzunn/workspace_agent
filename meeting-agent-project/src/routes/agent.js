@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { db } = require('../db.js');
 const MeetingOrchestrator = require('../services/orchestrator.js');
-const { getCalendarClient, findAvailability, syncEvents } = require('../services/calendar-service.js');
+const { getCalendarClient, findAvailability, findOverlaps } = require('../services/calendar-service.js');
 
 const router = Router();
 
@@ -112,7 +112,6 @@ function buildScheduleProposal(text, orchestrator) {
     ));
 
     // detect overlaps in existing calendar
-    const { findOverlaps } = require('../services/calendar-service.js');
     overlaps = findOverlaps(events);
   }
 
@@ -137,7 +136,6 @@ router.post('/runs', async (req, res) => {
     if (!text) return res.status(400).json({ error: 'text is required' });
 
     const orchestrator = new MeetingOrchestrator(req.user);
-    const intent = orchestrator.classifyIntent(text.toLowerCase());
     const plan = orchestrator.plan(text, {}) || {};
     const actionType = (plan.plan && plan.plan.type) || 'unknown';
 

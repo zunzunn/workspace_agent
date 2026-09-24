@@ -86,6 +86,10 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Meeting Agent API running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Meeting Agent API running on port ${PORT}`);
+  });
+}
+
+module.exports = app;

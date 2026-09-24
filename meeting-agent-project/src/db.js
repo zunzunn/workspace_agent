@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 
-const db = new Database('meeting_agent.db');
+const dbPath = process.env.MEETING_AGENT_DB || 'meeting_agent.db';
+const db = new Database(dbPath);
 
 // Enable WAL mode for better concurrency
 db.pragma('journal_mode = WAL');

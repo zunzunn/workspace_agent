@@ -23,19 +23,6 @@ const mapRow = (r) => r ? ({
   updatedAt: r.updated_at,
 }) : null;
 
-function getMeetingsFromTeam(teamId) {
-  if (teamId) {
-    return db.prepare(`SELECT * FROM meetings WHERE team_id = ? ORDER BY created_at DESC`).all(teamId);
-  }
-  return db.prepare(`
-    SELECT m.* FROM meetings m
-    JOIN teams t ON t.id = m.team_id
-    JOIN team_members tm ON tm.team_id = t.id
-    WHERE tm.user_id = ?
-    ORDER BY m.created_at DESC
-  `).all(req.user.id);
-}
-
 // GET /meetings (optionally ?teamId=)
 router.get('/', async (req, res) => {
   try {

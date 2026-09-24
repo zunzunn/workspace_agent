@@ -1,0 +1,95 @@
+const { test } = require('node:test');
+const assert = require('node:assert');
+const { findAvailability, findOverlaps } = require('../src/services/calendar-service.js');
+const {
+  prepareMeetingBrief,
+  createActionItemsFromNotes,
+  extractDecisionsFromNotes,
+} = require('../src/services/meeting-intelligence.js');
+
+test('findAvailability returns slots within window that avoid existing events', () => {
+  const events = [
+    { title: 'Busy', start: '2026-09-25T09:00:00.000Z', end: '2026-09-25T10:00:00.000Z' },
+  ];
+  const slots = findAvailability(
+    events,
+    30,
+    '2026-09-25T08:00:00.000Z',
+    '2026-09-25T12:00:00.000Z',
+    { stepMin: 30, bufferMin: 0 }
+  );
+  assert.ok(Array.isArray(slots));
+  assert.ok(slots.length > 0);
+  for (const s of slots) {
+    const startT = new Date(s.start).getTime();
+    const endT = new Date(s.end).getTime();
+    // must not overlap the busy block 09:00-10:00
+    const overlapsBusy = startT < new Date('2026-09-25T10:00:00.000Z').getTime()
+      && endT > new Date('2026-09-25T09:00:00.000Z').getTime();
+    assert.equal(overlapsBusy, false, `slot ${s.start} overlaps busy window`);
+  }
+});
+
+test('findAvailability respects bufferMin around existing events', () => {
+  const events = [
+    { title: 'Busy', start: '2026-09-25T10:00:00.000Z', end: '2026-09-25T10:30:00.000Z' },
+  ];
+  const slots = findAvailability(
+    events,
+    30,
+    '2026-09-25T09:00:00.000Z',
+    '2026-09-25T11:30:00.000Z',
+    { stepMin: 30, bufferMin: 15 }
+  );
+  for (const s of slots) {
+    const endT = new Date(s.end).getTime();
+    assert.ok(
+      endT <= new Date('2026-09-25T09:45:00.000Z').getTime() ||
+      new Date(s.start).getTime() >= new Date('2026-09-25T10:45:00.000Z').getTime(),
+      `slot ${s.start}-${s.end} violates buffer`
+    );
+  }
+});
+
+test('findOverlaps detects overlapping events', () => {
+  const events = [
+    { title: 'A', start: '2026-09-25T09:00:00.000Z', end: '2026-09-25T10:00:00.000Z' },
+    { title: 'B', start: '2026-09-25T09:30:00.000Z', end: '2026-09-25T10:30:00.000Z' },
+    { title: 'C', start: '2026-09-25T14:00:00.000Z', end: '2026-09-25T15:00:00.000Z' },
+  ];
+  const overlaps = findOverlaps(events);
+  assert.ok(Array.isArray(overlaps));
+  assert.ok(overlaps.length >= 1, 'expected at least one overlap');
+});
+
+test('extractDecisionsFromNotes captures Decision: lines', () => {
+  const notes = `
+Some discussion happened.
+Decision: Ship the new onboarding flow.
+Also talked about budgets.
+Decision: Cap the Q3 budget at 40k.
+`;
+  const { decisions } = extractDecisionsFromNotes(notes);
+  assert.equal(decisions.length, 2);
+  assert.ok(decisions[0].includes('onboarding'));
+});
+
+test('createActionItemsFromNotes captures Action item: lines as actionable objects', () => {
+  const notes = `
+Action item: Write the API spec.
+Action item: Book the venue
+`;
+  const actions = createActionItemsFromNotes(notes, 'demo@user.test');
+  assert.equal(actions.length, 2);
+  assert.ok(actions.every(a => a.text && a.done === false && a.owner === 'demo@user.test'));
+});
+
+test('prepareMeetingBrief includes objectives and discussion points', () => {
+  const brief = prepareMeetingBrief(
+    { meetingId: 'mtg_1', purpose: 'Sprint Planning', agenda: ['Review goals'], recentDecisions: [], actionItems: [] },
+    [{ purpose: 'Prior Sprint Planning', actionItems: [{ text: 'Use Scrum', done: 0 }] }]
+  );
+  assert.ok(brief.objectives && brief.objectives.length > 0);
+  assert.ok(Array.isArray(brief.discussionPoints));
+  assert.ok(brief.carryForward.some(c => c.includes('Scrum')));
+});
