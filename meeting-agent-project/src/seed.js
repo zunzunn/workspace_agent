@@ -55,12 +55,13 @@ db.prepare(`INSERT INTO calendar_connections (id, user_id, provider, provider_ac
   .run(connId, userId);
 
 const insertEvent = (title, startIso, endIso, opts = {}) => {
+  const evId = `ev_demo_${Math.random().toString(36).substr(2, 8)}`;
   db.prepare(`
     INSERT OR REPLACE INTO calendar_events
     (id, provider_event_id, calendar_connection_id, title, description, start, end, timezone, organizer, attendees, recurrence, all_day, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    `ev_demo_${Math.random().toString(36).substr(2, 8)}`,
+    evId,
     `google_demo_${Math.random().toString(36).substr(2, 8)}`,
     connId,
     title,
@@ -74,6 +75,7 @@ const insertEvent = (title, startIso, endIso, opts = {}) => {
     opts.allDay ? 1 : 0,
     'confirmed'
   );
+  return evId;
 };
 
 const pad = (days, hour, mins = 0, dur = 45) => {
@@ -86,7 +88,7 @@ const pad = (days, hour, mins = 0, dur = 45) => {
 let [s, e] = pad(-1, 14, 0, 60); insertEvent('Team Standup', s, e, { recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR'] });
 [s, e] = pad(-1, 10, 0, 30); insertEvent('1:1 with Alice', s, e, { attendees: ['alice@meetingagent.test'] });
 [s, e] = pad(0, 9, 30, 30); insertEvent('Email time (focus)', s, e, { description: 'Deep work block', attendees: [] });
-[s, e] = pad(0, 11, 0, 60); insertEvent('Sprint Planning', s, e, { attendees: ['alice@meetingagent.test', 'bob@meetingagent.test', 'carlos@meetingagent.test'] });
+[s, e] = pad(0, 11, 0, 60); const sprintPlanningId = insertEvent('Sprint Planning', s, e, { attendees: ['alice@meetingagent.test', 'bob@meetingagent.test', 'carlos@meetingagent.test'] });
 [s, e] = pad(0, 13, 0, 30); insertEvent('Lunch', s, e, { attendees: [] });
 [s, e] = pad(1, 10, 0, 60); insertEvent('Product Review', s, e, { attendees: ['alice@meetingagent.test', 'bob@meetingagent.test'] });
 [s, e] = pad(1, 15, 0, 45); insertEvent('Design Sync', s, e, { attendees: ['bob@meetingagent.test'] });
@@ -94,10 +96,10 @@ let [s, e] = pad(-1, 14, 0, 60); insertEvent('Team Standup', s, e, { recurrence:
 [s, e] = pad(3, 14, 0, 90); insertEvent('Client Demo', s, e, { attendees: ['client@example.com'] });
 [s, e] = pad(4, 11, 0, 60); insertEvent('Retro', s, e, { recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=FR'] });
 
-// A meeting workspace entry
+// A meeting workspace entry linked to the Sprint Planning event above
 db.prepare(`INSERT INTO meetings (id, team_id, calendar_event_id, purpose, agenda, preparation, notes, decisions, action_items, follow_up_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-  .run('mtg_1', teamId, null,
-    'Weekly planning sync',
+  .run('mtg_1', teamId, sprintPlanningId,
+    'Sprint Planning',
     '1. Review blockers\n2. Set priorities for week\n3. Assign owners',
     'Review sprint board before joining',
     JSON.stringify(['Discussed launch timeline']),

@@ -61,6 +61,7 @@
       <button data-view="teams">Teams</button>
       <button data-view="people">People</button>
       <button data-view="suggestions">Suggestions</button>
+      <button data-view="agents">Agents</button>
     </nav>
   </header>
   <main>
@@ -102,6 +103,19 @@
     <div id="view-suggestions" class="hidden">
       <div class="stats" id="suggestionStats"></div>
       <div class="card"><h3>Suggestion Feed</h3><ul id="suggestionList"></ul></div>
+    </div>
+
+    <div id="view-agents" class="hidden">
+      <div class="grid" id="agentsGrid"></div>
+      <div class="card" style="margin-top:16px">
+        <h3>Run a Negotiation</h3>
+        <div class="agent-input">
+          <input id="negotiateInput" placeholder="e.g. Find a time for the team sync" onkeydown="if(event.key==='Enter')runNegotiate()" />
+          <button onclick="runNegotiate()">Negotiate</button>
+        </div>
+        <pre id="negotiateOut" class="muted">Specialist agents will propose, object, and agree on a slot.</pre>
+      </div>
+      <div class="card" style="margin-top:16px"><h3>Outbox</h3><ul id="outboxList"></ul></div>
     </div>
   </main>
 
@@ -203,8 +217,39 @@
         : `<li class="muted">No suggestions right now — your calendar and meetings look healthy.</li>`;
     }
 
+    async function loadAgents() {
+      const specs = await api('/ecosystem/specialists');
+      $('#agentsGrid').innerHTML = specs.specialists.map(s => `
+        <div class="card"><h3>${s.name}</h3>
+          <div class="muted">${s.description}</div>
+          <div class="muted">skills: ${s.skills.join(', ')}</div>
+        </div>`).join('');
+
+      const outbox = await api('/ecosystem/outbox');
+      $('#outboxList').innerHTML = outbox.messages.length
+        ? outbox.messages.map(m => `<li>${pill(m.status)} <span>${m.kind}</span> <span class="muted">${m.to_address}</span></li>`).join('')
+        : `<li class="muted">No drafts yet.</li>`;
+    }
+
+    async function runNegotiate() {
+      const text = $('#negotiateInput').value.trim();
+      if (!text) return;
+      const out = $('#negotiateOut');
+      out.textContent = 'Negotiating…';
+      const r = await fetch('/ecosystem/negotiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const j = await r.json();
+      if (r.status !== 201) { out.textContent = j.error || 'Negotiation failed'; return; }
+      out.textContent = j.transcript.map(t => `[${t.speaker}] ${t.message}`).join('\n')
+        + `\n\nAgreed: ${new Date(j.agreement.start).toISOString()} → ${new Date(j.agreement.end).toISOString()}`;
+      loadAgents();
+    }
+
     async function load(view) {
-      ({ dashboard: loadDashboard, calendar: loadCalendar, meetings: loadMeetings, inbox: loadInbox, teams: loadTeams, people: loadPeople, suggestions: loadSuggestions }[view])();
+      ({ dashboard: loadDashboard, calendar: loadCalendar, meetings: loadMeetings, inbox: loadInbox, teams: loadTeams, people: loadPeople, suggestions: loadSuggestions, agents: loadAgents }[view])();
     }
 
     async function runAgent() {

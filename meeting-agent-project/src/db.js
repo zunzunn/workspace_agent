@@ -134,6 +134,33 @@ db.exec(`
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, provider)
   );
+
+  CREATE TABLE IF NOT EXISTS negotiations (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    request TEXT,
+    transcript TEXT DEFAULT '[]',
+    outcome TEXT,
+    slot TEXT,
+    status TEXT DEFAULT 'completed',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS communications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    kind TEXT,
+    to_address TEXT,
+    subject TEXT,
+    body TEXT,
+    status TEXT DEFAULT 'draft',
+    meeting_id TEXT,
+    sent_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE SET NULL
+  );
 `);
 
 console.log('Database tables created successfully');

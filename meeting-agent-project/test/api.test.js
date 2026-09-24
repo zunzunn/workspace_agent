@@ -150,7 +150,64 @@ test('frontend is served at /', async () => {
   assert.ok(html.includes('Meeting Agent'));
 });
 
-// ---- Phase 10: proactive agent ----
+// ---- Phase 11: advanced agent ecosystem ----
+
+test('GET /ecosystem/specialists lists the specialist registry', async () => {
+  const { status, json } = await api('GET', '/ecosystem/specialists');
+  assert.equal(status, 200);
+  const ids = json.specialists.map(s => s.id);
+  assert.ok(ids.includes('scheduler'));
+  assert.ok(ids.includes('focusguard'));
+  assert.ok(json.specialists.length >= 5);
+});
+
+test('POST /ecosystem/negotiate runs multi-agent negotiation to an agreement', async () => {
+  const { status, json } = await api('POST', '/ecosystem/negotiate', { text: 'Schedule a team sync' });
+  assert.equal(status, 201);
+  assert.ok(json.negotiationId);
+  assert.ok(json.agreement.start && json.agreement.end);
+  assert.ok(json.participants.includes('scheduler'));
+  assert.ok(json.transcript.length >= 3);
+
+  const outbound = await api('GET', '/ecosystem/outbox');
+  assert.ok(Array.isArray(outbound.json.messages));
+});
+
+test('GET /ecosystem/graph returns teams, people, and meeting links', async () => {
+  const { status, json } = await api('GET', '/ecosystem/graph');
+  assert.equal(status, 200);
+  assert.ok(json.teams.length >= 1);
+  const emails = json.people.map(p => p.email);
+  assert.ok(emails.includes('alice@meetingagent.test'));
+  assert.ok(json.stats.meetingLinks === 1, 'linked Sprint Planning meeting');
+  assert.ok(json.meetingLinks[0].attendees.includes('bob@meetingagent.test'));
+});
+
+test('POST /ecosystem/outbox creates a follow-up draft and send marks it delivered', async () => {
+  const { status, json } = await api('POST', '/ecosystem/outbox', { kind: 'follow_up', meetingId: 'mtg_1' });
+  assert.equal(status, 201);
+  assert.equal(json.message.status, 'draft');
+  assert.ok(json.message.subject.includes('Follow-up'));
+  assert.ok(json.message.body.includes('Open action items:'));
+  assert.ok(json.message.to_address.includes('alice@meetingagent.test'));
+
+  const sent = await api('POST', `/ecosystem/outbox/${json.message.id}/send`);
+  assert.equal(sent.status, 200);
+  assert.equal(sent.json.message.status, 'sent');
+  assert.equal(sent.json.transport, 'simulated');
+});
+
+test('POST /ecosystem/negotiate honors explicit candidate slots', async () => {
+  const slots = [
+    { start: '2027-02-01T15:00:00.000Z', end: '2027-02-01T16:00:00.000Z' },
+    { start: '2027-02-02T10:00:00.000Z', end: '2027-02-02T11:00:00.000Z' },
+    { start: '2027-02-03T09:30:00.000Z', end: '2027-02-03T10:30:00.000Z' },
+  ];
+  const { status, json } = await api('POST', '/ecosystem/negotiate', { candidateSlots: slots });
+  assert.equal(status, 201);
+  const chosen = [json.agreement.start, json.agreement.end];
+  assert.ok(slots.some(s => chosen.includes(s.start)), 'agreed slot must come from candidates');
+});
 
 test('GET /proactive/hygiene returns a score and issues list', async () => {
   const { status, json } = await api('GET', '/proactive/hygiene');
