@@ -6,6 +6,7 @@ const agentRouter = require('./routes/agent.js');
 const dashboardRouter = require('./routes/dashboard.js');
 const inboxRouter = require('./routes/inbox.js');
 const teamsRouter = require('./routes/teams.js');
+const peopleRouter = require('./routes/people.js');
 const bodyParser = require('body-parser');
 const MeetingOrchestrator = require('./services/orchestrator.js');
 const { db } = require('./db.js');
@@ -51,6 +52,7 @@ app.use('/agent', agentRouter);
 app.use('/dashboard', dashboardRouter);
 app.use('/inbox', inboxRouter);
 app.use('/teams', teamsRouter);
+app.use('/people', peopleRouter);
 
 // Agent request endpoint - the core AI agent loop
 app.post('/agent/request', async (req, res) => {

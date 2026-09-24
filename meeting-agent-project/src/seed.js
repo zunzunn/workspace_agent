@@ -32,6 +32,21 @@ const teamId = 'team_demo';
 db.prepare(`INSERT INTO teams (id, tenant_id, name, description) VALUES (?, ?, ?, ?)`)
   .run(teamId, 'default-tenant', 'Product Team', 'Building the Meeting Agent together');
 
+const teammateRows = [
+  ['user_alice', 'Alice Chen', 'alice@meetingagent.test', 'Product Manager', 'America/Los_Angeles'],
+  ['user_bob', 'Bob Reyes', 'bob@meetingagent.test', 'Frontend Engineer', 'America/Chicago'],
+  ['user_carlos', 'Carlos Mendez', 'carlos@meetingagent.test', 'Backend Engineer', 'America/Los_Angeles'],
+];
+for (const [uid, name, email, role, tz] of teammateRows) {
+  db.prepare(`INSERT INTO users (id, tenant_id, name, email, timezone, preferences) VALUES (?, ?, ?, ?, ?, ?)`)
+    .run(uid, 'default-tenant', name, email, tz, JSON.stringify({
+      earliestTime: '08:30', latestTime: '18:00', defaultDuration: 30, buffer: 10,
+      preferredDays: ['mon', 'tue', 'wed', 'thu', 'fri'],
+    }));
+  db.prepare(`INSERT INTO team_members (id, team_id, user_id, role) VALUES (?, ?, ?, ?)`)
+    .run(`tm_${uid}`, teamId, uid, role);
+}
+
 db.prepare(`INSERT INTO team_members (id, team_id, user_id, role) VALUES (?, ?, ?, ?)`)
   .run('tm_1', teamId, userId, 'admin');
 

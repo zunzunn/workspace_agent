@@ -102,4 +102,52 @@ router.get('/:id/context', async (req, res) => {
   }
 });
 
+// POST /teams/:id/members — add a member to a team (by email; creates the user if needed)
+router.post('/:id/members', async (req, res) => {
+  try {
+    const team = db.prepare(`SELECT * FROM teams WHERE id = ?`).get(req.params.id);
+    if (!team) return res.status(404).json({ error: 'Team not found' });
+
+    const { email, name, role } = req.body;
+    if (!email) return res.status(400).json({ error: 'email is required' });
+
+    let user = db.prepare(`SELECT * FROM users WHERE email = ?`).get(email);
+    if (!user) {
+      const uid = `user_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      db.prepare(`INSERT INTO users (id, tenant_id, name, email, timezone, preferences) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(uid, team.tenant_id, name || email, email, 'UTC', '{}');
+      user = db.prepare(`SELECT * FROM users WHERE id = ?`).get(uid);
+    }
+
+    const existing = db.prepare(`SELECT * FROM team_members WHERE team_id = ? AND user_id = ?`).get(team.id, user.id);
+    if (!existing) {
+      db.prepare(`INSERT INTO team_members (id, team_id, user_id, role) VALUES (?, ?, ?, ?)`)
+        .run(`tm_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`, team.id, user.id, role || 'member');
+    }
+
+    res.status(201).json({ member: { id: user.id, name: user.name, email: user.email, role: role || 'member' } });
+  } catch (error) {
+    console.error('Add team member error:', error);
+    res.status(500).json({ error: 'Failed to add team member' });
+  }
+});
+
+// DELETE /teams/:id/members/:userId — remove a member from a team
+router.delete('/:id/members/:userId', async (req, res) => {
+  try {
+    const team = db.prepare(`SELECT * FROM teams WHERE id = ?`).get(req.params.id);
+    if (!team) return res.status(404).json({ error: 'Team not found' });
+
+    const membership = db.prepare(`SELECT * FROM team_members WHERE team_id = ? AND user_id = ?`)
+      .get(team.id, req.params.userId);
+    if (!membership) return res.status(404).json({ error: 'Member not found in team' });
+
+    db.prepare(`DELETE FROM team_members WHERE id = ?`).run(membership.id);
+    res.json({ message: 'Member removed from team' });
+  } catch (error) {
+    console.error('Remove team member error:', error);
+    res.status(500).json({ error: 'Failed to remove team member' });
+  }
+});
+
 module.exports = router;

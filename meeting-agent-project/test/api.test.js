@@ -150,7 +150,61 @@ test('frontend is served at /', async () => {
   assert.ok(html.includes('Meeting Agent'));
 });
 
-// ---- Phase 8: calendar operations ----
+// ---- Phase 9: team workspace ----
+
+test('GET /people returns a directory with seeded teammates', async () => {
+  const { status, json } = await api('GET', '/people');
+  assert.equal(status, 200);
+  const emails = json.people.map(p => p.email);
+  assert.ok(emails.includes('alice@meetingagent.test'), 'expected alice in directory');
+  assert.ok(emails.includes('bob@meetingagent.test'), 'expected bob in directory');
+  const alice = json.people.find(p => p.email === 'alice@meetingagent.test');
+  assert.ok(alice.teams.some(t => t.name === 'Product Team'));
+});
+
+test('GET /people/:id/context returns person snapshot', async () => {
+  const dir = await api('GET', '/people');
+  const alice = dir.json.people.find(p => p.email === 'alice@meetingagent.test');
+  const { status, json } = await api('GET', `/people/${alice.id}/context`);
+  assert.equal(status, 200);
+  assert.equal(json.person.name, 'Alice Chen');
+  assert.equal(json.context.calendarConnected, false);
+  assert.equal(json.context.availableHoursThisWeek, null); // no connected calendar → unknown
+
+  // demo user has a connected calendar → numeric availability
+  const demo = await api('GET', '/people/demo_user/context');
+  assert.equal(demo.json.context.calendarConnected, true);
+  assert.equal(typeof demo.json.context.availableHoursThisWeek, 'number');
+});
+
+test('POST /teams/:id/members adds a member (creating the user)', async () => {
+  const teams = await api('GET', '/teams');
+  const team = teams.json.teams[0];
+  const { status, json } = await api('POST', `/teams/${team.id}/members`, {
+    email: 'newbie@meetingagent.test',
+    name: 'Newbie User',
+    role: 'engineer',
+  });
+  assert.equal(status, 201);
+  assert.equal(json.member.email, 'newbie@meetingagent.test');
+
+  const dir = await api('GET', '/people');
+  assert.ok(dir.json.people.some(p => p.email === 'newbie@meetingagent.test'));
+});
+
+test('DELETE /teams/:id/members/:userId removes the member', async () => {
+  const teams = await api('GET', '/teams');
+  const team = teams.json.teams[0];
+
+  await api('POST', `/teams/${team.id}/members`, { email: 'tempdrop@meetingagent.test', name: 'Temp Drop' });
+  const dir = await api('GET', '/people');
+  const temp = dir.json.people.find(p => p.email === 'tempdrop@meetingagent.test');
+  assert.ok(temp, 'member should exist before removal');
+
+  const del = await api('DELETE', `/teams/${team.id}/members/${temp.id}`);
+  assert.equal(del.status, 200);
+  assert.equal(del.json.message, 'Member removed from team');
+});
 
 test('POST /calendar/events with a conflict returns 409 unless allowConflict', async () => {
   // Grab an existing event window to force a collision

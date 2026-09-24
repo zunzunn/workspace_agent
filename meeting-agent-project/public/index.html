@@ -59,6 +59,7 @@
       <button data-view="meetings">Meetings</button>
       <button data-view="inbox">Inbox</button>
       <button data-view="teams">Teams</button>
+      <button data-view="people">People</button>
     </nav>
   </header>
   <main>
@@ -91,6 +92,10 @@
 
     <div id="view-teams" class="hidden">
       <div class="grid" id="teamsGrid"></div>
+    </div>
+
+    <div id="view-people" class="hidden">
+      <div class="grid" id="peopleGrid"></div>
     </div>
   </main>
 
@@ -168,8 +173,17 @@
         </div>`).join('') || `<div class="card"><h3>No teams</h3><p class="muted">Create a team to get started.</p></div>`;
     }
 
+    async function loadPeople() {
+      const d = await api('/people');
+      $('#peopleGrid').innerHTML = d.people.map(p => `
+        <div class="card"><h3>${p.name}</h3>
+          <div class="muted">${p.role} · ${p.email}</div>
+          <div class="muted">Timezone: ${p.timezone} · Teams: ${p.teams.map(t => t.name).join(', ')}</div>
+        </div>`).join('') || `<div class="card"><h3>No teammates</h3><p class="muted">Add team members to see them here.</p></div>`;
+    }
+
     async function load(view) {
-      ({ dashboard: loadDashboard, calendar: loadCalendar, meetings: loadMeetings, inbox: loadInbox, teams: loadTeams }[view])();
+      ({ dashboard: loadDashboard, calendar: loadCalendar, meetings: loadMeetings, inbox: loadInbox, teams: loadTeams, people: loadPeople }[view])();
     }
 
     async function runAgent() {
