@@ -1,11 +1,32 @@
 const { Router } = require('express');
 const { db } = require('../db.js');
-const { getCalendarClient, findOverlaps, findAvailability, syncEvents, mapGoogleEvent } = require('../services/calendar-service.js');
+const {
+  getCalendarClient, findOverlaps, findAvailability, findNextAvailableSlot, expandRecurrence, syncEvents, mapGoogleEvent,
+} = require('../services/calendar-service.js');
 
 const router = Router();
 
 function getConnectionForUser(userId) {
   return db.prepare(`SELECT * FROM calendar_connections WHERE user_id = ?`).get(userId);
+}
+
+// Find events that overlap [start, end), excluding a given event id
+function checkConflicts(connId, start, end, excludeId) {
+  const rows = db.prepare(`
+    SELECT * FROM calendar_events
+    WHERE calendar_connection_id = ?
+      AND all_day = 0
+      AND id != ?
+      AND start < ? AND end > ?
+    ORDER BY start ASC
+  `).all(connId, excludeId || '', end, start);
+  return rows.map(r => ({
+    id: r.id,
+    title: r.title,
+    start: r.start,
+    end: r.end,
+    status: r.status,
+  }));
 }
 
 function localEvents(connId, opts = {}) {
@@ -84,6 +105,16 @@ router.post('/events', async (req, res) => {
     const { title, start, end, timezone, attendees, description, recurrence } = req.body;
     if (!title || !start || !end) {
       return res.status(400).json({ error: 'title, start, end are required' });
+    }
+
+    // Conflict detection on write — report overlaps; the caller opts in to ignore with allowConflict
+    const conflicts = checkConflicts(conn.id, new Date(start).toISOString(), new Date(end).toISOString(), null);
+    if (conflicts.length > 0 && !req.body.allowConflict) {
+      return res.status(409).json({
+        error: 'Event conflicts with existing events',
+        conflicts,
+        hint: 'Set allowConflict: true to create anyway, or adjust the time window',
+      });
     }
 
     // Push to Google when credentials exist
@@ -179,6 +210,92 @@ router.patch('/events/:id', async (req, res) => {
   }
 });
 
+// POST /calendar/events/:id/reschedule
+// { start?, end?, durationMin?, mode?: 'exact'|'next' , allowConflict?: bool }
+router.post('/events/:id/reschedule', async (req, res) => {
+  try {
+    const conn = getConnectionForUser(req.user.id);
+    if (!conn) return res.status(404).json({ error: 'Calendar not connected' });
+    const existing = localEvents(conn.id, { eventId: req.params.id })[0];
+    if (!existing) return res.status(404).json({ error: 'Event not found' });
+
+    const { start, end, durationMin, mode = 'exact', allowConflict } = req.body;
+    let newStart = start;
+    let newEnd = end;
+
+    if (mode === 'next' || (!newStart && !newEnd)) {
+      const duration = durationMin || (existing.end && existing.start
+        ? Math.round((new Date(existing.end) - new Date(existing.start)) / 60000)
+        : 30);
+      const from = newStart || existing.start || new Date().toISOString();
+      const windowStart = new Date(from).toISOString();
+      const windowEnd = new Date(new Date(from).getTime() + 14 * 86400000).toISOString();
+      const events = localEvents(conn.id)
+        .filter(e => e.id !== existing.id && !e.allDay)
+        .map(e => ({ title: e.title, start: e.start, end: e.end }));
+      const slot = findNextAvailableSlot(events, duration, windowStart, windowEnd, 30);
+      if (!slot) return res.status(409).json({ error: 'No available slot found in the next 14 days' });
+      newStart = slot.start;
+      newEnd = slot.end;
+    }
+
+    if (!newStart || !newEnd) {
+      return res.status(400).json({ error: 'start and end (or durationMin with mode:next) are required' });
+    }
+
+    const conflicts = checkConflicts(conn.id, new Date(newStart).toISOString(), new Date(newEnd).toISOString(), existing.id);
+    if (conflicts.length > 0 && !allowConflict) {
+      return res.status(409).json({
+        error: 'Rescheduling would create a conflict',
+        conflicts,
+        hint: 'Set allowConflict: true to reschedule anyway, or use mode:next to find a free slot',
+      });
+    }
+
+    if (existing.providerEventId && !existing.providerEventId.startsWith('local_')) {
+      const cal = getCalendarClient(req.user.id);
+      if (cal) {
+        try {
+          await cal.events.patch({
+            calendarId: 'primary',
+            eventId: existing.providerEventId,
+            requestBody: {
+              start: { dateTime: new Date(newStart).toISOString(), timeZone: existing.timezone || 'UTC' },
+              end: { dateTime: new Date(newEnd).toISOString(), timeZone: existing.timezone || 'UTC' },
+            },
+          });
+        } catch (e) {
+          // best-effort provider push; still update local
+        }
+      }
+    }
+
+    db.prepare(`UPDATE calendar_events SET start = ?, end = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(new Date(newStart).toISOString(), new Date(newEnd).toISOString(), existing.id);
+
+    res.json({ message: 'Event rescheduled', event: localEvents(conn.id, { eventId: existing.id })[0] });
+  } catch (error) {
+    console.error('Reschedule event error:', error);
+    res.status(500).json({ error: 'Failed to reschedule event' });
+  }
+});
+
+// GET /calendar/events/:id/instances?count=8 — expand a recurring event into concrete instances
+router.get('/events/:id/instances', async (req, res) => {
+  try {
+    const conn = getConnectionForUser(req.user.id);
+    if (!conn) return res.status(404).json({ error: 'Calendar not connected' });
+    const event = localEvents(conn.id, { eventId: req.params.id })[0];
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+
+    const count = Number(req.query.count) || 8;
+    res.json({ eventId: event.id, title: event.title, recurrence: event.recurrence, instances: expandRecurrence(event, { count }) });
+  } catch (error) {
+    console.error('Expand recurrence error:', error);
+    res.status(500).json({ error: 'Failed to expand recurrence' });
+  }
+});
+
 // DELETE /calendar/events/:id
 router.delete('/events/:id', async (req, res) => {
   try {
@@ -244,6 +361,48 @@ router.post('/availability', async (req, res) => {
   } catch (error) {
     console.error('Availability error:', error);
     res.status(500).json({ error: 'Failed to compute availability' });
+  }
+});
+
+// GET /calendar/preferences — return the current user's scheduling preferences
+router.get('/preferences', async (req, res) => {
+  try {
+    const user = db.prepare(`SELECT preferences FROM users WHERE id = ?`).get(req.user.id);
+    let prefs = {};
+    try { prefs = JSON.parse((user && user.preferences) || '{}'); } catch { /* keep {} */ }
+    res.json({ preferences: prefs });
+  } catch (error) {
+    console.error('Get preferences error:', error);
+    res.status(500).json({ error: 'Failed to fetch preferences' });
+  }
+});
+
+// PUT /calendar/preferences — merge scheduling preferences
+// Supports: earliestTime, latestTime, defaultDuration, buffer, preferredDays, timezone
+router.put('/preferences', async (req, res) => {
+  try {
+    const user = db.prepare(`SELECT preferences FROM users WHERE id = ?`).get(req.user.id);
+    let prefs = {};
+    try { prefs = JSON.parse((user && user.preferences) || '{}'); } catch { /* keep {} */ }
+
+    const { earliestTime, latestTime, defaultDuration, buffer, preferredDays, timezone } = req.body;
+    const merged = {
+      ...prefs,
+      ...(earliestTime !== undefined && { earliestTime }),
+      ...(latestTime !== undefined && { latestTime }),
+      ...(defaultDuration !== undefined && { defaultDuration: Number(defaultDuration) }),
+      ...(buffer !== undefined && { buffer: Number(buffer) }),
+      ...(preferredDays !== undefined && { preferredDays }),
+      ...(timezone !== undefined && { timezone }),
+    };
+
+    db.prepare(`UPDATE users SET preferences = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(JSON.stringify(merged), req.user.id);
+
+    res.json({ message: 'Preferences updated', preferences: merged });
+  } catch (error) {
+    console.error('Update preferences error:', error);
+    res.status(500).json({ error: 'Failed to update preferences' });
   }
 });
 

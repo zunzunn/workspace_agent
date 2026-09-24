@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { findAvailability, findOverlaps } = require('../src/services/calendar-service.js');
+const { findAvailability, findOverlaps, expandRecurrence } = require('../src/services/calendar-service.js');
 const {
   prepareMeetingBrief,
   createActionItemsFromNotes,
@@ -82,6 +82,38 @@ Action item: Book the venue
   const actions = createActionItemsFromNotes(notes, 'demo@user.test');
   assert.equal(actions.length, 2);
   assert.ok(actions.every(a => a.text && a.done === false && a.owner === 'demo@user.test'));
+});
+
+test('findAvailability must not produce weekend slots when they are not preferred', () => {
+  const slots = findAvailability(
+    [],
+    30,
+    '2026-09-25T00:00:00.000Z', // Friday
+    '2026-09-27T23:59:59.000Z', // Sunday
+    { stepMin: 60, preferredDays: ['mon', 'tue', 'wed', 'thu', 'fri'] }
+  );
+  assert.ok(slots.length, 'expected weekday slots');
+  for (const s of slots) {
+    const day = new Date(s.start).getDay();
+    assert.ok(day !== 0 && day !== 6, `slot on day ${day} should be excluded`);
+  }
+});
+
+test('expandRecurrence expands FREQ=WEEKLY with BYDAY', () => {
+  const instances = expandRecurrence(
+    {
+      start: '2026-09-24T14:00:00.000Z',
+      end: '2026-09-24T15:00:00.000Z',
+      recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR'],
+    },
+    { count: 6 }
+  );
+  assert.equal(instances.length, 6);
+});
+
+test('expandRecurrence returns [] for non-recurring events', () => {
+  const instances = expandRecurrence({ start: '2026-09-24T14:00:00.000Z', end: '2026-09-24T15:00:00.000Z', recurrence: [] });
+  assert.deepEqual(instances, []);
 });
 
 test('prepareMeetingBrief includes objectives and discussion points', () => {

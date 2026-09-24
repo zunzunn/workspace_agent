@@ -7,6 +7,65 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
 ];
 
+// Expand a recurring event into concrete instances given an RFC5545 RRULE.
+// Supports FREQ=DAILY and FREQ=WEEKLY with BYDAY/INTERVAL/COUNT/UNTIL (best-effort).
+function expandRecurrence(event, { count = 32 } = {}) {
+  const ruleStr = (event.recurrence || []).find(r => r.startsWith('RRULE:'));
+  if (!ruleStr) return [];
+  const rule = {};
+  for (const part of ruleStr.replace(/^RRULE:/, '').split(';')) {
+    const [k, v] = part.split('=');
+    if (k) rule[k] = v;
+  }
+  if (rule.FREQ !== 'DAILY' && rule.FREQ !== 'WEEKLY') return [];
+
+  const start = new Date(event.start);
+  const durationMs = new Date(event.end).getTime() - start.getTime();
+  const days = { MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6, SU: 0 };
+  const byDay = (rule.BYDAY || '').split(',').filter(Boolean).map(d => days[d.trim().slice(-2)]);
+  const interval = Number(rule.INTERVAL) || 1;
+  const maxCount = Number(rule.COUNT) || count;
+
+  const instances = [];
+  const seen = new Set();
+  let cursor = new Date(start);
+  cursor.setHours(start.getHours(), start.getMinutes(), 0, 0);
+
+  for (let guard = 0; guard < maxCount * 60 && instances.length < maxCount; guard++) {
+    if (rule.FREQ === 'WEEKLY') {
+      if ((cursor - start) / (7 * 86400000) % interval === 0) {
+        for (const dow of byDay) {
+          const diff = (dow - cursor.getDay() + 7) % 7;
+          const inst = new Date(cursor);
+          inst.setDate(inst.getDate() + diff);
+          const key = inst.toISOString();
+          if (!seen.has(key) && inst >= start) {
+            seen.add(key);
+            const end = new Date(inst.getTime() + durationMs);
+            instances.push({ start: inst.toISOString(), end: end.toISOString() });
+          }
+          if (instances.length >= maxCount) break;
+        }
+      }
+      cursor.setDate(cursor.getDate() + 7);
+    } else {
+      // FREQ=DAILY
+      if (instances.length >= maxCount) break;
+      if (cursor >= start) {
+        instances.push({ start: cursor.toISOString(), end: new Date(cursor.getTime() + durationMs).toISOString() });
+      }
+      cursor.setDate(cursor.getDate() + interval);
+    }
+  }
+  return instances.sort((a, b) => new Date(a.start) - new Date(b.start)).slice(0, maxCount);
+}
+
+// Find the next free slot of durationMin within a start window, skipping conflicts (buffer-aware).
+function findNextAvailableSlot(events, durationMin, windowStart, windowEnd, stepMin = 30) {
+  const slots = findAvailability(events, durationMin, windowStart, windowEnd, { stepMin, bufferMin: 15 });
+  return slots[0] || null;
+}
+
 function getOAuthClient(tokens) {
   const client = new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
@@ -89,6 +148,7 @@ function findAvailability(events, durationMin, windowStart, windowEnd, options =
   const busy = normalizeToRange(events);
   const stepMin = options.stepMin || 30;
   const bufferMin = options.bufferMin || 0;
+  const preferredDays = options.preferredDays || ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
   const startMs = new Date(windowStart).getTime();
   const endMs = new Date(windowEnd).getTime();
@@ -99,6 +159,10 @@ function findAvailability(events, durationMin, windowStart, windowEnd, options =
   for (let t = startMs; t + durationMs <= endMs; t += stepMs) {
     const slotStart = t;
     const slotEnd = t + durationMs;
+
+    const slotDay = new Date(slotStart);
+    const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    if (!preferredDays.includes(dayNames[slotDay.getDay()])) continue;
 
     // Apply buffer around the slot
     const bufferedStart = slotStart - bufferMin * 60000;
@@ -178,5 +242,7 @@ module.exports = {
   mapGoogleEvent,
   findOverlaps,
   findAvailability,
+  findNextAvailableSlot,
+  expandRecurrence,
   syncEvents,
 };

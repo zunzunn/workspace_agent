@@ -149,3 +149,80 @@ test('frontend is served at /', async () => {
   const html = await res.text();
   assert.ok(html.includes('Meeting Agent'));
 });
+
+// ---- Phase 8: calendar operations ----
+
+test('POST /calendar/events with a conflict returns 409 unless allowConflict', async () => {
+  // Grab an existing event window to force a collision
+  const list = await api('GET', '/calendar/events');
+  const existing = list.json.events.find(e => e.start && e.end && !e.allDay);
+  assert.ok(existing, 'expected a seeded event');
+
+  const { status, json } = await api('POST', '/calendar/events', {
+    title: 'Conflicting Event',
+    start: existing.start,
+    end: existing.end,
+  });
+  assert.equal(status, 409);
+  assert.ok(json.conflicts.length >= 1, 'expected at least one conflict reported');
+
+  const ok = await api('POST', '/calendar/events', {
+    title: 'Conflicting Event',
+    start: existing.start,
+    end: existing.end,
+    allowConflict: true,
+  });
+  assert.equal(ok.status, 201);
+});
+
+test('POST /calendar/events/:id/reschedule moves an event (exact mode)', async () => {
+  const list = await api('GET', '/calendar/events');
+  const event = list.json.events.find(e => e.start && e.end && !e.allDay);
+  assert.ok(event, 'expected a seeded event');
+
+  const newStart = '2027-01-05T20:00:00.000Z';
+  const newEnd = '2027-01-05T21:00:00.000Z';
+  const { status, json } = await api('POST', `/calendar/events/${event.id}/reschedule`, {
+    start: newStart, end: newEnd,
+  });
+  assert.equal(status, 200);
+  assert.equal(json.event.start, newStart);
+  assert.equal(json.event.end, newEnd);
+});
+
+test('POST /calendar/events/:id/reschedule mode:next finds a free slot', async () => {
+  const list = await api('GET', '/calendar/events');
+  const event = list.json.events.find(e => e.start && e.end && !e.allDay);
+  const { status, json } = await api('POST', `/calendar/events/${event.id}/reschedule`, {
+    mode: 'next', durationMin: 30,
+  });
+  assert.equal(status, 200);
+  assert.ok(json.event.start && json.event.end);
+});
+
+test('GET /calendar/events/:id/instances expands a recurring event', async () => {
+  const list = await api('GET', '/calendar/events');
+  const recurring = list.json.events.find(e => e.recurrence && e.recurrence.length);
+  assert.ok(recurring, 'expected a recurring event');
+
+  const { status, json } = await api('GET', `/calendar/events/${recurring.id}/instances?count=5`);
+  assert.equal(status, 200);
+  assert.ok(json.instances.length >= 1, `expected >= 1 instance, got ${json.instances.length}`);
+  assert.ok(json.instances[0].start && json.instances[0].end);
+});
+
+test('GET/PUT /calendar/preferences roundtrips', async () => {
+  const before = await api('GET', '/calendar/preferences');
+  assert.equal(before.status, 200);
+  assert.equal(typeof before.json.preferences, 'object');
+
+  const { status, json } = await api('PUT', '/calendar/preferences', {
+    defaultDuration: 60, buffer: 20, preferredDays: ['mon', 'wed', 'fri'],
+  });
+  assert.equal(status, 200);
+  assert.equal(json.preferences.defaultDuration, 60);
+  assert.deepEqual(json.preferences.preferredDays, ['mon', 'wed', 'fri']);
+
+  const after = await api('GET', '/calendar/preferences');
+  assert.equal(after.json.preferences.buffer, 20);
+});

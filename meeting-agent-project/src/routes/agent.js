@@ -108,7 +108,7 @@ function buildScheduleProposal(text, orchestrator) {
       (userPrefs.defaultDuration || 30),
       windowStart.toISOString(),
       windowEnd.toISOString(),
-      { stepMin: 30, bufferMin: userPrefs.buffer || 0 }
+      { stepMin: 30, bufferMin: userPrefs.buffer || 0, preferredDays: userPrefs.preferredDays }
     ));
 
     // detect overlaps in existing calendar
@@ -240,6 +240,41 @@ async function executeRun(run, user) {
     }
 
     if (actionType === 'prepare_meeting') {
+      return { executionStatus: 'completed', verificationStatus: 'verified', error: null };
+    }
+
+    if (actionType === 'reschedule_meeting') {
+      const conn = getConnectionForUser(user.id);
+      if (!conn) {
+        return { executionStatus: 'failed', verificationStatus: 'failed', error: 'Calendar not connected' };
+      }
+      const targetTitle = proposal.eventTitle || proposal.title;
+      const target = targetTitle
+        ? db.prepare(`SELECT * FROM calendar_events WHERE calendar_connection_id = ? AND title LIKE ? ORDER BY start ASC LIMIT 1`)
+            .get(conn.id, `%${targetTitle}%`)
+        : null;
+      if (!target) {
+        return { executionStatus: 'failed', verificationStatus: 'failed', error: 'No matching event found to reschedule' };
+      }
+      const slot = proposal.selectedSlot || (proposal.candidateSlots || [])[0];
+      if (!slot) {
+        return { executionStatus: 'failed', verificationStatus: 'failed', error: 'No slot selected in proposal' };
+      }
+
+      const cal = getCalendarClient(user.id);
+      if (cal && target.provider_event_id && !target.provider_event_id.startsWith('local_')) {
+        await cal.events.patch({
+          calendarId: 'primary',
+          eventId: target.provider_event_id,
+          requestBody: {
+            start: { dateTime: new Date(slot.start).toISOString(), timeZone: user.timezone },
+            end: { dateTime: new Date(slot.end).toISOString(), timeZone: user.timezone },
+          },
+        });
+      }
+      db.prepare(`UPDATE calendar_events SET start = ?, end = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+        .run(new Date(slot.start).toISOString(), new Date(slot.end).toISOString(), target.id);
+
       return { executionStatus: 'completed', verificationStatus: 'verified', error: null };
     }
 
