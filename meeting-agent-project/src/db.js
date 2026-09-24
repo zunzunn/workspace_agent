@@ -57,12 +57,15 @@ db.exec(`
     provider_event_id TEXT,
     calendar_connection_id TEXT,
     title TEXT,
+    description TEXT DEFAULT '',
     start TIMESTAMP,
     end TIMESTAMP,
     timezone TEXT,
     organizer TEXT,
     attendees TEXT DEFAULT '[]',
     recurrence TEXT DEFAULT '[]',
+    all_day INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'confirmed',
     last_synced_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -131,7 +134,21 @@ db.exec(`
 
 console.log('Database tables created successfully');
 
+// Lightweight migrations for existing databases
+const calCols = db.prepare(`PRAGMA table_info(calendar_events)`).all().map(c => c.name);
+if (!calCols.includes('description')) {
+  db.exec(`ALTER TABLE calendar_events ADD COLUMN description TEXT DEFAULT ''`);
+}
+if (!calCols.includes('all_day')) {
+  db.exec(`ALTER TABLE calendar_events ADD COLUMN all_day INTEGER DEFAULT 0`);
+}
+if (!calCols.includes('status')) {
+  db.exec(`ALTER TABLE calendar_events ADD COLUMN status TEXT DEFAULT 'confirmed'`);
+}
+
 // Export helper functions
+exports.db = db;
+
 exports.insertUser = function(userData) {
   const stmt = db.prepare(
     `INSERT INTO users (id, tenant_id, name, email, timezone, preferences) VALUES (?, ?, ?, ?, ?, ?)`

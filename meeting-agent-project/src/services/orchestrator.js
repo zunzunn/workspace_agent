@@ -168,15 +168,46 @@ MeetingOrchestrator.prototype.retrieve = function(requestText, context) {
 };
 
 MeetingOrchestrator.prototype.fetchCalendarEvents = function() {
-  return [];
+  const conn = db.prepare(`SELECT * FROM calendar_connections WHERE user_id = ?`).get(this.user.id);
+  if (!conn) return [];
+  const rows = db.prepare(`SELECT * FROM calendar_events WHERE calendar_connection_id = ? ORDER BY start ASC`)
+    .all(conn.id);
+  return rows.map(r => ({
+    id: r.id,
+    title: r.title,
+    start: r.start,
+    end: r.end,
+    timezone: r.timezone,
+    attendees: JSON.parse(r.attendees || '[]'),
+  }));
 };
 
 MeetingOrchestrator.prototype.fetchTeamMembers = function() {
-  return [];
+  const rows = db.prepare(`
+    SELECT t.name AS team_name, u.id, u.name, u.email, tm.role
+    FROM team_members tm
+    JOIN teams t ON t.id = tm.team_id
+    JOIN users u ON u.id = tm.user_id
+    WHERE u.tenant_id = ?
+  `).all(this.user.tenant_id);
+  return rows;
 };
 
 MeetingOrchestrator.prototype.fetchMeetingHistory = function() {
-  return [];
+  const rows = db.prepare(`
+    SELECT m.*, t.name AS team_name
+    FROM meetings m
+    JOIN teams t ON t.id = m.team_id
+  `).all();
+  return rows.map(r => ({
+    id: r.id,
+    purpose: r.purpose,
+    agenda: r.agenda,
+    notes: r.notes,
+    decisions: JSON.parse(r.decisions || '[]'),
+    actionItems: JSON.parse(r.action_items || '[]'),
+    followUpState: r.follow_up_state,
+  }));
 };
 
 /**

@@ -3,20 +3,33 @@ const authRouter = require('./routes/auth.js');
 const calendarRouter = require('./routes/calendar.js');
 const bodyParser = require('body-parser');
 const MeetingOrchestrator = require('./services/orchestrator.js');
+const { db } = require('./db.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Set demo user for all routes
+// Resolve the authenticated user (demo user seeded by src/seed.js)
 app.use((req, res, next) => {
-  req.user = {
-    id: 'demo_user_' + Date.now(),
-    tenant_id: 'default-tenant',
-    name: 'Demo User',
-    email: 'demo@meetingagent.test',
-    timezone: 'UTC',
-    preferences: {}
-  };
+  const user = db.prepare(`SELECT * FROM users WHERE id = 'demo_user'`).get();
+  if (user) {
+    req.user = {
+      id: user.id,
+      tenant_id: user.tenant_id,
+      name: user.name,
+      email: user.email,
+      timezone: user.timezone,
+      preferences: JSON.parse(user.preferences || '{}'),
+    };
+  } else {
+    req.user = {
+      id: 'demo_user',
+      tenant_id: 'default-tenant',
+      name: 'Demo User',
+      email: 'demo@meetingagent.test',
+      timezone: 'UTC',
+      preferences: {},
+    };
+  }
   next();
 });
 
